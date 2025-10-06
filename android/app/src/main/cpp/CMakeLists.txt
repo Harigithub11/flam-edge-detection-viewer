@@ -16,6 +16,7 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 # Source files
 set(SOURCES
     native-lib.cpp
+    ImageProcessor.cpp
 )
 
 # Create native library
