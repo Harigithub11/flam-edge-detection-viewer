@@ -16,7 +16,7 @@ import androidx.core.content.ContextCompat
 
 class CameraManager(
     private val context: Context,
-    private val textureView: TextureView
+    private val textureView: TextureView?
 ) {
     companion object {
         private const val TAG = "CameraManager"
@@ -116,23 +116,27 @@ class CameraManager(
                 backgroundHandler
             )
 
-            // Get surface from TextureView
-            val texture = textureView.surfaceTexture?.apply {
-                setDefaultBufferSize(TARGET_WIDTH, TARGET_HEIGHT)
+            // Get surface from TextureView (if available)
+            val previewSurface = textureView?.let { tv ->
+                val texture = tv.surfaceTexture?.apply {
+                    setDefaultBufferSize(TARGET_WIDTH, TARGET_HEIGHT)
+                }
+                Surface(texture)
             }
-            val previewSurface = Surface(texture)
 
-            // Create surfaces list
-            val surfaces = listOf(
-                previewSurface,
-                imageReader!!.surface
-            )
+            // Create surfaces list (with or without preview)
+            val surfaces = if (previewSurface != null) {
+                listOf(previewSurface, imageReader!!.surface)
+            } else {
+                listOf(imageReader!!.surface)
+            }
 
             // Create capture request
             val captureRequestBuilder = device.createCaptureRequest(
                 CameraDevice.TEMPLATE_PREVIEW
             ).apply {
-                addTarget(previewSurface)
+                // Add preview target if available
+                previewSurface?.let { addTarget(it) }
                 addTarget(imageReader!!.surface)
 
                 // Auto focus
