@@ -1,0 +1,82 @@
+# Android
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+bin/
+gen/
+out/
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+*.hprof
+.cxx/
+.externalNativeBuild/
+.cmake/
+
+# NDK
+obj/
+libs/
+*.so
+*.a
+
+# OpenCV (don't commit SDK)
+android/app/src/main/cpp/opencv/
+
+# Kotlin
+*.kt~
+
+# Java
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# Node.js / TypeScript
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+*.tsbuildinfo
+.npm
+.eslintcache
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# Secrets (NEVER commit)
+*.key
+*.keystore
+secrets.json
+.env
+local.properties
+
+# Build outputs
+*.log
+*.tmp
+temp/
+
+# Media (large files)
+# Keep screenshots but ignore large videos
+*.mov
+*.avi
+*.mkv
+# Keep GIFs for demo (they're optimized)
