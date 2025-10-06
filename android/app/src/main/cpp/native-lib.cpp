@@ -1,5 +1,6 @@
 #include <jni.h>
 #include <string>
+#include <cstring>
 #include <android/log.h>
 #include <opencv2/opencv.hpp>
 #include <chrono>
@@ -73,8 +74,13 @@ Java_com_flam_edgeviewer_processing_FrameProcessor_processFrameNative(
     // Performance timing
     auto startTime = std::chrono::high_resolution_clock::now();
 
-    // Get input array
-    jbyte* inputBytes = env->GetByteArrayElements(inputFrame, nullptr);
+    // Get input array using GetPrimitiveArrayCritical for zero-copy access
+    // CRITICAL SECTION: No JNI calls allowed between Get/ReleasePrimitiveArrayCritical
+    jboolean isCopy = JNI_FALSE;
+    jbyte* inputBytes = reinterpret_cast<jbyte*>(
+        env->GetPrimitiveArrayCritical(inputFrame, &isCopy)
+    );
+
     if (inputBytes == nullptr) {
         LOGE("Failed to get input array");
         return nullptr;
@@ -82,51 +88,64 @@ Java_com_flam_edgeviewer_processing_FrameProcessor_processFrameNative(
 
     jsize inputSize = env->GetArrayLength(inputFrame);
 
+    // Create OpenCV Mat from input (YUV or RGBA)
+    // Assuming RGBA for simplicity (convert YUV in production)
+    cv::Mat inputMat(height, width, CV_8UC4, inputBytes);
+
+    // Process frame
+    cv::Mat outputMat;
+
     try {
-        // Create OpenCV Mat from input (YUV or RGBA)
-        // Assuming RGBA for simplicity (convert YUV in production)
-        cv::Mat inputMat(height, width, CV_8UC4, inputBytes);
-
-        // Process frame
-        cv::Mat outputMat;
         ImageProcessor::processFrame(inputMat, outputMat, mode);
+    } catch (const cv::Exception& e) {
+        LOGE("OpenCV error: %s", e.what());
+        env->ReleasePrimitiveArrayCritical(inputFrame, inputBytes, JNI_ABORT);
+        return nullptr;
+    } catch (const std::exception& e) {
+        LOGE("Error: %s", e.what());
+        env->ReleasePrimitiveArrayCritical(inputFrame, inputBytes, JNI_ABORT);
+        return nullptr;
+    }
 
-        // Convert output to byte array
-        int outputSize = outputMat.total() * outputMat.elemSize();
-        jbyteArray outputArray = env->NewByteArray(outputSize);
+    // Release critical section immediately after processing
+    env->ReleasePrimitiveArrayCritical(inputFrame, inputBytes, JNI_ABORT);
 
-        if (outputArray == nullptr) {
-            LOGE("Failed to create output array");
-            env->ReleaseByteArrayElements(inputFrame, inputBytes, JNI_ABORT);
-            return nullptr;
-        }
+    // Convert output to byte array (outside critical section)
+    int outputSize = outputMat.total() * outputMat.elemSize();
+    jbyteArray outputArray = env->NewByteArray(outputSize);
 
+    if (outputArray == nullptr) {
+        LOGE("Failed to create output array");
+        return nullptr;
+    }
+
+    // Use GetPrimitiveArrayCritical for output as well for optimization
+    jbyte* outputBytes = reinterpret_cast<jbyte*>(
+        env->GetPrimitiveArrayCritical(outputArray, nullptr)
+    );
+
+    if (outputBytes != nullptr) {
+        // Direct memory copy
+        std::memcpy(outputBytes, outputMat.data, outputSize);
+        env->ReleasePrimitiveArrayCritical(outputArray, outputBytes, 0);
+    } else {
+        // Fallback to SetByteArrayRegion if critical access fails
         env->SetByteArrayRegion(
             outputArray,
             0,
             outputSize,
             reinterpret_cast<jbyte*>(outputMat.data)
         );
-
-        // Release input array
-        env->ReleaseByteArrayElements(inputFrame, inputBytes, JNI_ABORT);
-
-        // Log performance
-        auto endTime = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            endTime - startTime
-        ).count();
-        LOGD("Native processing took: %lld ms", duration);
-
-        return outputArray;
-
-    } catch (const cv::Exception& e) {
-        LOGE("OpenCV error: %s", e.what());
-        env->ReleaseByteArrayElements(inputFrame, inputBytes, JNI_ABORT);
-        return nullptr;
-    } catch (const std::exception& e) {
-        LOGE("Error: %s", e.what());
-        env->ReleaseByteArrayElements(inputFrame, inputBytes, JNI_ABORT);
-        return nullptr;
     }
+
+    // Log performance
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        endTime - startTime
+    ).count();
+    LOGD("Native processing took: %lld ms (zero-copy: %s)",
+         duration,
+         isCopy ? "false" : "true");
+
+    return outputArray;
 }
