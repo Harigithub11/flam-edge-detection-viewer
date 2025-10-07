@@ -26,6 +26,8 @@ class ShaderProgram(private val context: Context) {
     // Uniform locations
     var textureHandle: Int = 0
         private set
+    var rotationMatrixHandle: Int = 0
+        private set
 
     fun initialize() {
         // Load shader source code from resources
@@ -43,10 +45,11 @@ class ShaderProgram(private val context: Context) {
         positionHandle = GLES20.glGetAttribLocation(programId, "a_Position")
         texCoordHandle = GLES20.glGetAttribLocation(programId, "a_TexCoord")
         textureHandle = GLES20.glGetUniformLocation(programId, "u_Texture")
+        rotationMatrixHandle = GLES20.glGetUniformLocation(programId, "u_RotationMatrix")
 
         Log.d(TAG, "Shader program initialized: $programId")
         Log.d(TAG, "Attribute locations - position: $positionHandle, texCoord: $texCoordHandle")
-        Log.d(TAG, "Uniform location - texture: $textureHandle")
+        Log.d(TAG, "Uniform locations - texture: $textureHandle, rotationMatrix: $rotationMatrixHandle")
     }
 
     private fun loadShaderFromResource(resourceId: Int): String {

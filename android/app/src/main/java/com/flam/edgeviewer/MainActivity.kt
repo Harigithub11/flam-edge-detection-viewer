@@ -177,9 +177,26 @@ class MainActivity : AppCompatActivity() {
             freezeFrame()
         }
 
-        // Confirm button - save frozen frame
-        binding.confirmFab.setOnClickListener {
-            confirmCapture()
+        // Confirm button - show dropdown menu with save/export options
+        binding.confirmFab.setOnClickListener { view ->
+            val popup = PopupMenu(this, view)
+            popup.menuInflater.inflate(R.menu.confirm_menu, popup.menu)
+
+            popup.setOnMenuItemClickListener { menuItem ->
+                when (menuItem.itemId) {
+                    R.id.action_save_gallery -> {
+                        confirmCapture()
+                        true
+                    }
+                    R.id.action_export_web -> {
+                        exportToWeb()
+                        true
+                    }
+                    else -> false
+                }
+            }
+
+            popup.show()
         }
 
         // Retake button - resume live feed
@@ -204,16 +221,6 @@ class MainActivity : AppCompatActivity() {
                 binding.confirmFab.visibility = android.view.View.VISIBLE
                 binding.retakeFab.visibility = android.view.View.VISIBLE
             }
-
-            // Send frozen state to web viewer
-            val modeString = when (currentMode) {
-                FrameProcessor.MODE_RAW -> "raw"
-                FrameProcessor.MODE_EDGES -> "edges"
-                FrameProcessor.MODE_GRAYSCALE -> "grayscale"
-                else -> "unknown"
-            }
-
-            webSocketServer.sendStateChange("frozen", modeString)
 
             Log.d(TAG, "Frame frozen")
         } else {
@@ -240,7 +247,18 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
             }
 
-            // Send saved state to web viewer
+            Log.d(TAG, "Frame saved to gallery")
+        }
+
+        // Resume live feed after saving
+        resumeLiveFeed()
+    }
+
+    private fun exportToWeb() {
+        val frame = frozenFrame
+        if (frame != null) {
+            // Send frozen frame to web viewer
+            val currentFps = fpsCounter.getCurrentFPS()
             val modeString = when (currentMode) {
                 FrameProcessor.MODE_RAW -> "raw"
                 FrameProcessor.MODE_EDGES -> "edges"
@@ -248,10 +266,26 @@ class MainActivity : AppCompatActivity() {
                 else -> "unknown"
             }
 
-            webSocketServer.sendStateChange("saved", modeString)
+            webSocketServer.sendFrame(
+                frameData = frame,
+                width = frozenFrameWidth,
+                height = frozenFrameHeight,
+                channels = frozenFrameChannels,
+                fps = currentFps,
+                processingTimeMs = 0f,
+                mode = modeString,
+                state = "exported"
+            )
 
-            Log.d(TAG, "Frame saved")
+            runOnUiThread {
+                Toast.makeText(this, "Frame exported to web", Toast.LENGTH_SHORT).show()
+            }
+
+            Log.d(TAG, "Frame exported to web")
         }
+
+        // Resume live feed after exporting
+        resumeLiveFeed()
     }
 
     private fun resumeLiveFeed() {
@@ -265,16 +299,6 @@ class MainActivity : AppCompatActivity() {
             binding.confirmFab.visibility = android.view.View.GONE
             binding.retakeFab.visibility = android.view.View.GONE
         }
-
-        // Send live state to web viewer
-        val modeString = when (currentMode) {
-            FrameProcessor.MODE_RAW -> "raw"
-            FrameProcessor.MODE_EDGES -> "edges"
-            FrameProcessor.MODE_GRAYSCALE -> "grayscale"
-            else -> "unknown"
-        }
-
-        webSocketServer.sendStateChange("live", modeString)
 
         Log.d(TAG, "Resumed live feed")
     }
@@ -300,9 +324,9 @@ class MainActivity : AppCompatActivity() {
         cameraManager = com.flam.edgeviewer.camera.CameraManager(this, null)
 
         // Set frame callback - non-blocking, just add to buffer
-        cameraManager?.onFrameAvailable = { frameData, width, height ->
-            // Add frame to buffer (camera thread)
-            val added = frameBuffer.putFrame(frameData, width, height)
+        cameraManager?.onFrameAvailable = { frameData, width, height, rotationDegrees ->
+            // Add frame to buffer (camera thread) with rotation info
+            val added = frameBuffer.putFrame(frameData, width, height, rotationDegrees)
             if (!added) {
                 Log.d(TAG, "Frame dropped - buffer full")
             }
@@ -331,7 +355,7 @@ class MainActivity : AppCompatActivity() {
 
                 if (frame != null) {
                     isProcessingFrame = true
-                    processFrame(frame.data, frame.width, frame.height)
+                    processFrame(frame.data, frame.width, frame.height, frame.rotationDegrees)
                     isProcessingFrame = false
                 } else {
                     // No frame available, wait briefly
@@ -343,34 +367,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun processFrame(frame: ByteArray, width: Int, height: Int) {
-        Log.d(TAG, "processFrame called: width=$width, height=$height, frameSize=${frame.size}")
+    private fun processFrame(frame: ByteArray, width: Int, height: Int, rotationDegrees: Int) {
+        Log.d(TAG, "processFrame called: width=$width, height=$height, frameSize=${frame.size}, rotation=$rotationDegrees")
 
-        // If frame is frozen, use frozen frame instead
+        // If frame is frozen, render frozen frame to GL (Android display only, no WebSocket)
         if (isFrameFrozen && frozenFrame != null) {
             // Render frozen frame to GL
             glRenderer.updateFrame(frozenFrame!!, frozenFrameWidth, frozenFrameHeight, frozenFrameChannels)
             glSurfaceView.requestRender()
-
-            // Send frozen frame to WebSocket
-            val currentFps = fpsCounter.getCurrentFPS()
-            val modeString = when (currentMode) {
-                FrameProcessor.MODE_RAW -> "raw"
-                FrameProcessor.MODE_EDGES -> "edges"
-                FrameProcessor.MODE_GRAYSCALE -> "grayscale"
-                else -> "unknown"
-            }
-
-            webSocketServer.sendFrame(
-                frameData = frozenFrame!!,
-                width = frozenFrameWidth,
-                height = frozenFrameHeight,
-                channels = frozenFrameChannels,
-                fps = currentFps,
-                processingTimeMs = 0f,
-                mode = modeString,
-                state = "frozen"
-            )
 
             // Skip processing new frames
             Thread.sleep(50) // Reduce CPU usage
@@ -380,12 +384,13 @@ class MainActivity : AppCompatActivity() {
         // Start performance monitoring
         perfMonitor.start()
 
-        // Process frame via JNI with current mode
+        // Process frame via JNI with current mode (no rotation for web viewer)
         val processedFrame = frameProcessor.processFrame(
             frame,
             width,
             height,
-            currentMode
+            currentMode,
+            0  // Don't rotate - web viewer needs raw orientation
         )
         perfMonitor.mark("Processing")
 
@@ -393,15 +398,16 @@ class MainActivity : AppCompatActivity() {
         if (processedFrame != null) {
             Log.d(TAG, "Processed frame received: size=${processedFrame.size}")
 
-            // Save for export
+            // Determine channels based on mode
+            val channels = if (currentMode == FrameProcessor.MODE_RAW) 3 else 1
+
+            // Save for export (use original dimensions)
             lastProcessedFrame = processedFrame
             lastFrameWidth = width
             lastFrameHeight = height
 
-            // Determine channels based on mode
-            val channels = if (currentMode == FrameProcessor.MODE_RAW) 3 else 1
-
-            glRenderer.updateFrame(processedFrame, width, height, channels)
+            // For Android display, no rotation - natural gyro-like behavior
+            glRenderer.updateFrame(processedFrame, width, height, channels, 0)
             perfMonitor.mark("Texture Upload")
 
             Log.d(TAG, "Calling glSurfaceView.requestRender()")
@@ -432,25 +438,7 @@ class MainActivity : AppCompatActivity() {
                 binding.processingTimeText.text = "Processing: $totalTime ms"
             }
 
-            // Send frame via WebSocket to web viewer
-            val currentFps = fpsCounter.getCurrentFPS()
-            val modeString = when (currentMode) {
-                FrameProcessor.MODE_RAW -> "raw"
-                FrameProcessor.MODE_EDGES -> "edges"
-                FrameProcessor.MODE_GRAYSCALE -> "grayscale"
-                else -> "unknown"
-            }
-
-            webSocketServer.sendFrame(
-                frameData = processedFrame,
-                width = width,
-                height = height,
-                channels = channels,
-                fps = currentFps,
-                processingTimeMs = totalTime.toFloat(),
-                mode = modeString,
-                state = "live"
-            )
+            // NO LIVE FEED - frames are only sent when user clicks "Export to Web"
 
             // Log detailed timing every 60 frames
             perfFrameCount++

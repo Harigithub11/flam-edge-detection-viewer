@@ -12,6 +12,7 @@ class FrameBuffer {
         val data: ByteArray,
         val width: Int,
         val height: Int,
+        val rotationDegrees: Int = 0,
         val timestamp: Long = System.nanoTime()
     ) {
         override fun equals(other: Any?): Boolean {
@@ -23,6 +24,7 @@ class FrameBuffer {
             if (!data.contentEquals(other.data)) return false
             if (width != other.width) return false
             if (height != other.height) return false
+            if (rotationDegrees != other.rotationDegrees) return false
             if (timestamp != other.timestamp) return false
 
             return true
@@ -32,6 +34,7 @@ class FrameBuffer {
             var result = data.contentHashCode()
             result = 31 * result + width
             result = 31 * result + height
+            result = 31 * result + rotationDegrees
             result = 31 * result + timestamp.hashCode()
             return result
         }
@@ -44,9 +47,9 @@ class FrameBuffer {
      * Add frame to queue (non-blocking)
      * Returns true if added, false if queue full (frame dropped)
      */
-    fun putFrame(data: ByteArray, width: Int, height: Int): Boolean {
+    fun putFrame(data: ByteArray, width: Int, height: Int, rotationDegrees: Int = 0): Boolean {
         // offer() is non-blocking, returns false if queue full
-        return frameQueue.offer(Frame(data, width, height))
+        return frameQueue.offer(Frame(data, width, height, rotationDegrees))
     }
 
     /**

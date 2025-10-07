@@ -3,6 +3,7 @@ package com.flam.edgeviewer.gl
 import android.content.Context
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
+import android.opengl.Matrix
 import android.util.Log
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
@@ -25,6 +26,7 @@ class GLRenderer(private val context: Context) : GLSurfaceView.Renderer {
     private var frameWidth: Int = 0
     private var frameHeight: Int = 0
     private var frameChannels: Int = 1
+    private var rotationDegrees: Int = 0
     private var frameUpdated: Boolean = false
 
     // Lock for thread-safe frame updates
@@ -95,6 +97,10 @@ class GLRenderer(private val context: Context) : GLSurfaceView.Renderer {
             // Set texture uniform to texture unit 0
             shaderProgram?.let {
                 GLES20.glUniform1i(it.textureHandle, 0)
+
+                // Set rotation matrix based on current rotation
+                val rotationMatrix = createRotationMatrix(rotationDegrees)
+                GLES20.glUniformMatrix4fv(it.rotationMatrixHandle, 1, false, rotationMatrix, 0)
             }
 
             quadGeometry?.draw(shaderProgram)
@@ -110,16 +116,34 @@ class GLRenderer(private val context: Context) : GLSurfaceView.Renderer {
      * Update frame data (called from camera thread)
      * Thread-safe
      */
-    fun updateFrame(frameData: ByteArray, width: Int, height: Int, channels: Int = 1) {
-        Log.d(TAG, "updateFrame called: ${width}x${height}, dataSize=${frameData.size}, channels=$channels")
+    fun updateFrame(frameData: ByteArray, width: Int, height: Int, channels: Int = 1, rotation: Int = 0) {
+        Log.d(TAG, "updateFrame called: ${width}x${height}, dataSize=${frameData.size}, channels=$channels, rotation=$rotation")
         synchronized(frameLock) {
             currentFrame = frameData
             frameWidth = width
             frameHeight = height
             frameChannels = channels
+            rotationDegrees = rotation
             frameUpdated = true
             Log.d(TAG, "Frame update completed, frameUpdated=$frameUpdated")
         }
+    }
+
+    /**
+     * Create rotation matrix for given rotation degrees
+     */
+    private fun createRotationMatrix(degrees: Int): FloatArray {
+        val matrix = FloatArray(16)
+        Matrix.setIdentityM(matrix, 0)
+
+        when (degrees) {
+            90 -> Matrix.rotateM(matrix, 0, 90f, 0f, 0f, 1f)
+            180 -> Matrix.rotateM(matrix, 0, 180f, 0f, 0f, 1f)
+            270 -> Matrix.rotateM(matrix, 0, 270f, 0f, 0f, 1f)
+            else -> {} // 0 degrees - identity matrix
+        }
+
+        return matrix
     }
 
     /**

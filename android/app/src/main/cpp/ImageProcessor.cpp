@@ -63,12 +63,13 @@ void ImageProcessor::cannyEdgeDetection(
         gray = input;
     }
 
-    // Apply Gaussian blur for noise reduction (reduced from 5x5 to 3x3 for speed)
-    cv::GaussianBlur(gray, blurred, cv::Size(3, 3), 1.0);
+    // Apply Gaussian blur for noise reduction (5x5 kernel for better quality)
+    cv::GaussianBlur(gray, blurred, cv::Size(5, 5), 1.5);
 
-    // Canny edge detection (optimized thresholds and aperture for speed)
-    // Parameters: low threshold = 50, high threshold = 150, aperture = 3
-    cv::Canny(blurred, output, 50, 150, 3, false);  // L2gradient=false for speed
+    // Canny edge detection - balanced thresholds for clean, professional output
+    // Higher thresholds (100, 200) filter out noise/tiny details while keeping major edges
+    // Parameters: low threshold = 100, high threshold = 200, aperture = 5, L2gradient = true
+    cv::Canny(blurred, output, 100, 200, 5, true);  // L2gradient=true for better accuracy
 
     LOGD("Canny edge detection completed");
 }
@@ -86,4 +87,25 @@ void ImageProcessor::grayscaleFilter(
     }
 
     LOGD("Grayscale filter completed");
+}
+
+void ImageProcessor::rotateFrame(
+    const cv::Mat& input,
+    cv::Mat& output,
+    int rotationDegrees
+) {
+    switch (rotationDegrees) {
+        case 90:
+            cv::rotate(input, output, cv::ROTATE_90_CLOCKWISE);
+            break;
+        case 180:
+            cv::rotate(input, output, cv::ROTATE_180);
+            break;
+        case 270:
+            cv::rotate(input, output, cv::ROTATE_90_COUNTERCLOCKWISE);
+            break;
+        default:
+            input.copyTo(output);
+            break;
+    }
 }

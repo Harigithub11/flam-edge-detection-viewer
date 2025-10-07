@@ -28,6 +28,9 @@ class App {
         // Setup connection UI
         this.setupConnectionUI();
 
+        // Setup download button
+        this.setupDownloadButton();
+
         // Try to connect if device IP is provided
         this.tryAutoConnect();
 
@@ -138,20 +141,43 @@ class App {
     }
 
     /**
+     * Setup download button
+     */
+    private setupDownloadButton(): void {
+        const downloadBtn = document.getElementById('downloadBtn');
+        const canvas = document.getElementById('frameCanvas') as HTMLCanvasElement;
+
+        if (downloadBtn && canvas) {
+            downloadBtn.addEventListener('click', () => {
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `flam-frame-${Date.now()}.png`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    }
+                });
+            });
+        }
+    }
+
+    /**
      * Update UI based on capture state
      */
     private updateUIState(state: string): void {
-        const captureActions = document.getElementById('captureActions');
+        const downloadBtn = document.getElementById('downloadBtn');
 
-        if (state === 'frozen') {
-            // Show confirm/retake buttons
-            if (captureActions) {
-                captureActions.style.display = 'flex';
+        if (state === 'exported') {
+            // Show download button for exported frame
+            if (downloadBtn) {
+                downloadBtn.style.display = 'block';
             }
-        } else if (state === 'live' || state === 'saved') {
-            // Hide confirm/retake buttons
-            if (captureActions) {
-                captureActions.style.display = 'none';
+        } else {
+            // Hide download button for other states
+            if (downloadBtn) {
+                downloadBtn.style.display = 'none';
             }
         }
     }

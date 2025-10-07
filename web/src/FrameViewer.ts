@@ -7,6 +7,7 @@ export class FrameViewer {
     private canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
     private config: ViewerConfig;
+    private placeholder: HTMLElement | null;
 
     constructor(config: ViewerConfig) {
         this.config = config;
@@ -27,6 +28,9 @@ export class FrameViewer {
 
         this.ctx = context;
 
+        // Get placeholder element
+        this.placeholder = document.getElementById('placeholderImage');
+
         console.log('FrameViewer initialized');
     }
 
@@ -37,17 +41,23 @@ export class FrameViewer {
         const img = new Image();
 
         img.onload = () => {
-            // Set canvas size to match image
-            this.canvas.width = frameData.metadata.width;
-            this.canvas.height = frameData.metadata.height;
+            const frameWidth = frameData.metadata.width;
+            const frameHeight = frameData.metadata.height;
 
-            // Clear canvas
-            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            // Hide placeholder, show canvas
+            if (this.placeholder) {
+                this.placeholder.classList.add('hidden');
+            }
+            this.canvas.classList.add('visible');
 
-            // Draw image
-            this.ctx.drawImage(img, 0, 0);
+            // Check if Android is in portrait (sends wide image)
+            const isAndroidPortrait = frameWidth > frameHeight;
 
-            console.log(`Frame displayed: ${frameData.metadata.width}x${frameData.metadata.height}`);
+            if (isAndroidPortrait) {
+                this.displayPortraitFrame(img, frameWidth, frameHeight);
+            } else {
+                this.displayLandscapeFrame(img, frameWidth, frameHeight);
+            }
         };
 
         img.onerror = (error) => {
@@ -56,6 +66,39 @@ export class FrameViewer {
 
         // Set image source (triggers load)
         img.src = frameData.imageData;
+    }
+
+    /**
+     * Display portrait frame (rotate 90 degrees clockwise)
+     */
+    private displayPortraitFrame(img: HTMLImageElement, frameWidth: number, frameHeight: number): void {
+        // Portrait: rotate 90 degrees clockwise (right)
+        this.canvas.width = frameHeight;
+        this.canvas.height = frameWidth;
+
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+        this.ctx.save();
+        this.ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
+        this.ctx.rotate(90 * Math.PI / 180); // 90 degrees clockwise
+        this.ctx.drawImage(img, -frameWidth / 2, -frameHeight / 2);
+        this.ctx.restore();
+
+        console.log(`Portrait rotated 90° right: ${frameWidth}x${frameHeight} → ${this.canvas.width}x${this.canvas.height}`);
+    }
+
+    /**
+     * Display landscape frame (show as-is, wide)
+     */
+    private displayLandscapeFrame(img: HTMLImageElement, frameWidth: number, frameHeight: number): void {
+        // Landscape: show as-is (wide orientation)
+        this.canvas.width = frameWidth;
+        this.canvas.height = frameHeight;
+
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.drawImage(img, 0, 0);
+
+        console.log(`Landscape no rotation: ${frameWidth}x${frameHeight}`);
     }
 
     /**

@@ -25,7 +25,7 @@ class WebSocketServer {
         private const val TAG = "WebSocketServer"
         private const val PORT = 8080
         private const val MAX_FRAME_QUEUE_SIZE = 1  // Keep only latest frame
-        private const val JPEG_QUALITY = 60  // Reduce from 85 to 60 for faster encoding
+        private const val JPEG_QUALITY = 90  // High quality for single frame export
     }
 
     private var server: NettyApplicationEngine? = null
@@ -191,7 +191,7 @@ class WebSocketServer {
                 }
                 bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
 
-                // Compress to JPEG for efficient transmission
+                // Compress to JPEG with high quality
                 val outputStream = ByteArrayOutputStream()
                 bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, outputStream)
                 val jpegBytes = outputStream.toByteArray()

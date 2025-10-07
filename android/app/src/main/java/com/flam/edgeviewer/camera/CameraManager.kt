@@ -20,8 +20,8 @@ class CameraManager(
 ) {
     companion object {
         private const val TAG = "CameraManager"
-        private const val TARGET_WIDTH = 640
-        private const val TARGET_HEIGHT = 480
+        private const val TARGET_WIDTH = 1920
+        private const val TARGET_HEIGHT = 1080
     }
 
     private var cameraDevice: CameraDevice? = null
@@ -30,8 +30,10 @@ class CameraManager(
     private var backgroundThread: HandlerThread? = null
     private var backgroundHandler: Handler? = null
 
-    // Callback for frame availability
-    var onFrameAvailable: ((ByteArray, Int, Int) -> Unit)? = null
+    private var sensorOrientation: Int = 0
+
+    // Callback for frame availability (data, width, height, rotationDegrees)
+    var onFrameAvailable: ((ByteArray, Int, Int, Int) -> Unit)? = null
 
     fun openCamera() {
         val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
@@ -70,6 +72,9 @@ class CameraManager(
 
                 // Use back camera
                 if (facing == CameraCharacteristics.LENS_FACING_BACK) {
+                    // Get sensor orientation
+                    sensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 0
+                    Log.d(TAG, "Camera sensor orientation: $sensorOrientation")
                     return cameraId
                 }
             }
@@ -195,9 +200,15 @@ class CameraManager(
             // Convert YUV to byte array
             val byteArray = imageToByteArray(image)
 
+            // Get current display rotation
+            val displayRotation = getDisplayRotation()
+            val rotationDegrees = getRotationDegrees(displayRotation)
+
+            Log.d(TAG, "Display rotation: $displayRotation, Rotation degrees: $rotationDegrees, Sensor orientation: $sensorOrientation")
+
             Log.d(TAG, "Invoking onFrameAvailable callback, callback is null: ${onFrameAvailable == null}")
-            // Callback with frame data
-            onFrameAvailable?.invoke(byteArray, image.width, image.height)
+            // Callback with frame data and rotation info
+            onFrameAvailable?.invoke(byteArray, image.width, image.height, rotationDegrees)
             Log.d(TAG, "onFrameAvailable callback completed")
 
         } catch (e: Exception) {
@@ -205,6 +216,19 @@ class CameraManager(
         } finally {
             image.close()
         }
+    }
+
+    private fun getDisplayRotation(): Int {
+        return try {
+            (context as? android.app.Activity)?.windowManager?.defaultDisplay?.rotation ?: 0
+        } catch (e: Exception) {
+            0
+        }
+    }
+
+    private fun getRotationDegrees(displayRotation: Int): Int {
+        // Don't rotate - web viewer needs the raw orientation
+        return 0
     }
 
     private fun imageToByteArray(image: android.media.Image): ByteArray {

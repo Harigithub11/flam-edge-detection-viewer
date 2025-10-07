@@ -20,6 +20,12 @@ public:
         int mode
     );
 
+    static void rotateFrame(
+        const cv::Mat& input,
+        cv::Mat& output,
+        int rotationDegrees
+    );
+
 private:
     static void cannyEdgeDetection(
         const cv::Mat& input,

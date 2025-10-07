@@ -69,7 +69,8 @@ Java_com_flam_edgeviewer_processing_FrameProcessor_processFrameNative(
         jbyteArray inputFrame,
         jint width,
         jint height,
-        jint mode) {
+        jint mode,
+        jint rotationDegrees) {
 
     // Performance timing
     auto startTime = std::chrono::high_resolution_clock::now();
@@ -129,7 +130,15 @@ Java_com_flam_edgeviewer_processing_FrameProcessor_processFrameNative(
     cv::Mat outputMat;
 
     try {
+        // Process frame
         ImageProcessor::processFrame(inputMat, outputMat, mode);
+
+        // Apply rotation if needed
+        if (rotationDegrees != 0) {
+            cv::Mat rotatedMat;
+            ImageProcessor::rotateFrame(outputMat, rotatedMat, rotationDegrees);
+            outputMat = rotatedMat;
+        }
     } catch (const cv::Exception& e) {
         LOGE("OpenCV error: %s", e.what());
         return nullptr;

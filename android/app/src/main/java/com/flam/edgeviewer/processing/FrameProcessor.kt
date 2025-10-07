@@ -21,7 +21,8 @@ class FrameProcessor {
         inputFrame: ByteArray,
         width: Int,
         height: Int,
-        mode: Int
+        mode: Int,
+        rotationDegrees: Int
     ): ByteArray?
 
     private external fun initializeProcessor(): Boolean
@@ -41,7 +42,8 @@ class FrameProcessor {
         frame: ByteArray,
         width: Int,
         height: Int,
-        mode: Int = MODE_EDGES
+        mode: Int = MODE_EDGES,
+        rotationDegrees: Int = 0
     ): ByteArray? {
         if (!initialized) {
             Log.e(TAG, "Processor not initialized")
@@ -51,7 +53,7 @@ class FrameProcessor {
         val startTime = System.nanoTime()
 
         val result = try {
-            processFrameNative(frame, width, height, mode)
+            processFrameNative(frame, width, height, mode, rotationDegrees)
         } catch (e: Exception) {
             Log.e(TAG, "Error processing frame", e)
             null

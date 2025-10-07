@@ -18,6 +18,8 @@ class App {
         this.setupWebSocketCallbacks();
         // Setup connection UI
         this.setupConnectionUI();
+        // Setup download button
+        this.setupDownloadButton();
         // Try to connect if device IP is provided
         this.tryAutoConnect();
         console.log('✅ Application initialized');
@@ -117,20 +119,41 @@ class App {
         }
     }
     /**
+     * Setup download button
+     */
+    setupDownloadButton() {
+        const downloadBtn = document.getElementById('downloadBtn');
+        const canvas = document.getElementById('frameCanvas');
+        if (downloadBtn && canvas) {
+            downloadBtn.addEventListener('click', () => {
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `flam-frame-${Date.now()}.png`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    }
+                });
+            });
+        }
+    }
+    /**
      * Update UI based on capture state
      */
     updateUIState(state) {
-        const captureActions = document.getElementById('captureActions');
-        if (state === 'frozen') {
-            // Show confirm/retake buttons
-            if (captureActions) {
-                captureActions.style.display = 'flex';
+        const downloadBtn = document.getElementById('downloadBtn');
+        if (state === 'exported') {
+            // Show download button for exported frame
+            if (downloadBtn) {
+                downloadBtn.style.display = 'block';
             }
         }
-        else if (state === 'live' || state === 'saved') {
-            // Hide confirm/retake buttons
-            if (captureActions) {
-                captureActions.style.display = 'none';
+        else {
+            // Hide download button for other states
+            if (downloadBtn) {
+                downloadBtn.style.display = 'none';
             }
         }
     }
