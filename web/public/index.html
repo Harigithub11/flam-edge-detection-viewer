@@ -39,6 +39,15 @@
                 </div>
                 <div class="canvas-container">
                     <canvas id="frameCanvas"></canvas>
+                    <!-- Capture Action Buttons (hidden by default) -->
+                    <div id="captureActions" class="capture-actions" style="display: none;">
+                        <button id="retakeButton" class="action-btn retake-btn" title="Retake">
+                            🔄
+                        </button>
+                        <button id="confirmButton" class="action-btn confirm-btn" title="Confirm">
+                            ✓
+                        </button>
+                    </div>
                 </div>
             </section>
 
@@ -90,6 +99,6 @@
     </div>
 
     <!-- Load compiled TypeScript (as ES module) -->
-    <script type="module" src="../dist/index.js"></script>
+    <script type="module" src="./index.js"></script>
 </body>
 </html>

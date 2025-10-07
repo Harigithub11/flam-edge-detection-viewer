@@ -59,6 +59,13 @@ class MainActivity : AppCompatActivity() {
     // WebSocket server for real-time streaming
     private val webSocketServer = WebSocketServer()
 
+    // Frame freeze/capture state
+    private var isFrameFrozen = false
+    private var frozenFrame: ByteArray? = null
+    private var frozenFrameWidth: Int = 0
+    private var frozenFrameHeight: Int = 0
+    private var frozenFrameChannels: Int = 1
+
     companion object {
         private const val TAG = "MainActivity"
 
@@ -161,28 +168,111 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupCaptureButton() {
+        // Capture button - freeze frame
         binding.captureFab.setOnClickListener {
-            captureFrame()
+            freezeFrame()
+        }
+
+        // Confirm button - save frozen frame
+        binding.confirmFab.setOnClickListener {
+            confirmCapture()
+        }
+
+        // Retake button - resume live feed
+        binding.retakeFab.setOnClickListener {
+            resumeLiveFeed()
         }
     }
 
-    private fun captureFrame() {
+    private fun freezeFrame() {
         val frame = lastProcessedFrame
         if (frame != null) {
-            val channels = if (currentMode == FrameProcessor.MODE_RAW) 3 else 1
-            val success = frameExporter.exportFrame(frame, lastFrameWidth, lastFrameHeight, channels)
+            // Store frozen frame
+            frozenFrame = frame.clone()
+            frozenFrameWidth = lastFrameWidth
+            frozenFrameHeight = lastFrameHeight
+            frozenFrameChannels = if (currentMode == FrameProcessor.MODE_RAW) 3 else 1
+            isFrameFrozen = true
 
+            // Update UI
             runOnUiThread {
-                val message = if (success) {
-                    "Frame captured and saved"
-                } else {
-                    "Failed to capture frame"
-                }
-                Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+                binding.captureFab.visibility = android.view.View.GONE
+                binding.confirmFab.visibility = android.view.View.VISIBLE
+                binding.retakeFab.visibility = android.view.View.VISIBLE
             }
+
+            // Send frozen state to web viewer
+            val modeString = when (currentMode) {
+                FrameProcessor.MODE_RAW -> "raw"
+                FrameProcessor.MODE_EDGES -> "edges"
+                FrameProcessor.MODE_GRAYSCALE -> "grayscale"
+                else -> "unknown"
+            }
+
+            webSocketServer.sendStateChange("frozen", modeString)
+
+            Log.d(TAG, "Frame frozen")
         } else {
             Toast.makeText(this, "No frame to capture", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun confirmCapture() {
+        val frame = frozenFrame
+        if (frame != null) {
+            val success = frameExporter.exportFrame(
+                frame,
+                frozenFrameWidth,
+                frozenFrameHeight,
+                frozenFrameChannels
+            )
+
+            runOnUiThread {
+                val message = if (success) {
+                    "Frame saved to gallery"
+                } else {
+                    "Failed to save frame"
+                }
+                Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+            }
+
+            // Send saved state to web viewer
+            val modeString = when (currentMode) {
+                FrameProcessor.MODE_RAW -> "raw"
+                FrameProcessor.MODE_EDGES -> "edges"
+                FrameProcessor.MODE_GRAYSCALE -> "grayscale"
+                else -> "unknown"
+            }
+
+            webSocketServer.sendStateChange("saved", modeString)
+
+            Log.d(TAG, "Frame saved")
+        }
+    }
+
+    private fun resumeLiveFeed() {
+        // Clear frozen state
+        isFrameFrozen = false
+        frozenFrame = null
+
+        // Update UI
+        runOnUiThread {
+            binding.captureFab.visibility = android.view.View.VISIBLE
+            binding.confirmFab.visibility = android.view.View.GONE
+            binding.retakeFab.visibility = android.view.View.GONE
+        }
+
+        // Send live state to web viewer
+        val modeString = when (currentMode) {
+            FrameProcessor.MODE_RAW -> "raw"
+            FrameProcessor.MODE_EDGES -> "edges"
+            FrameProcessor.MODE_GRAYSCALE -> "grayscale"
+            else -> "unknown"
+        }
+
+        webSocketServer.sendStateChange("live", modeString)
+
+        Log.d(TAG, "Resumed live feed")
     }
 
     private fun setupGLSurfaceView() {
@@ -243,6 +333,37 @@ class MainActivity : AppCompatActivity() {
 
     private fun processFrame(frame: ByteArray, width: Int, height: Int) {
         Log.d(TAG, "processFrame called: width=$width, height=$height, frameSize=${frame.size}")
+
+        // If frame is frozen, use frozen frame instead
+        if (isFrameFrozen && frozenFrame != null) {
+            // Render frozen frame to GL
+            glRenderer.updateFrame(frozenFrame!!, frozenFrameWidth, frozenFrameHeight, frozenFrameChannels)
+            glSurfaceView.requestRender()
+
+            // Send frozen frame to WebSocket
+            val currentFps = fpsCounter.getCurrentFPS()
+            val modeString = when (currentMode) {
+                FrameProcessor.MODE_RAW -> "raw"
+                FrameProcessor.MODE_EDGES -> "edges"
+                FrameProcessor.MODE_GRAYSCALE -> "grayscale"
+                else -> "unknown"
+            }
+
+            webSocketServer.sendFrame(
+                frameData = frozenFrame!!,
+                width = frozenFrameWidth,
+                height = frozenFrameHeight,
+                channels = frozenFrameChannels,
+                fps = currentFps,
+                processingTimeMs = 0f,
+                mode = modeString,
+                state = "frozen"
+            )
+
+            // Skip processing new frames
+            Thread.sleep(50) // Reduce CPU usage
+            return
+        }
 
         // Start performance monitoring
         perfMonitor.start()
@@ -315,7 +436,8 @@ class MainActivity : AppCompatActivity() {
                 channels = channels,
                 fps = currentFps,
                 processingTimeMs = totalTime.toFloat(),
-                mode = modeString
+                mode = modeString,
+                state = "live"
             )
 
             // Log detailed timing every 60 frames

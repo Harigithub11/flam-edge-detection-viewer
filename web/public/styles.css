@@ -167,6 +167,50 @@ body {
     border-radius: 12px;
     padding: 20px;
     min-height: 400px;
+    position: relative;
+}
+
+/* Capture Action Buttons */
+.capture-actions {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 20px;
+    z-index: 10;
+}
+
+.action-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: none;
+    font-size: 28px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.retake-btn {
+    background: #FF9800;
+    color: white;
+}
+
+.confirm-btn {
+    background: #4CAF50;
+    color: white;
+}
+
+.action-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.action-btn:active {
+    transform: scale(0.95);
 }
 
 canvas {

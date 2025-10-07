@@ -1,92 +1,74 @@
 import { FrameViewer } from './FrameViewer.js';
 import { WebSocketClient } from './WebSocketClient.js';
-import { FrameData } from './types.js';
-
 /**
  * Main application entry point
  */
 class App {
-    private viewer: FrameViewer;
-    private wsClient: WebSocketClient;
-
     constructor() {
         console.log('🚀 Flam Edge Detection Viewer - Starting...');
-
         // Initialize viewer
         this.viewer = new FrameViewer({
             canvasId: 'frameCanvas',
             showStats: true,
             scalingMode: 'fit'
         });
-
         // Initialize WebSocket client
         this.wsClient = new WebSocketClient();
-
         // Setup WebSocket callbacks
         this.setupWebSocketCallbacks();
-
         // Setup connection UI
         this.setupConnectionUI();
-
         // Try to connect if device IP is provided
         this.tryAutoConnect();
-
         console.log('✅ Application initialized');
     }
-
     /**
      * Setup WebSocket callbacks
      */
-    private setupWebSocketCallbacks(): void {
+    setupWebSocketCallbacks() {
         // Handle incoming frames
-        this.wsClient.onFrame((frameData: FrameData) => {
+        this.wsClient.onFrame((frameData) => {
             // Display frame
             this.viewer.displayFrame(frameData);
-
             // Update stats
             this.viewer.updateStats(frameData.metadata);
-
             // Update mode display
             this.updateModeDisplay(frameData.metadata.mode || 'unknown');
-
             // Update UI based on state
             if (frameData.metadata.state) {
                 this.updateUIState(frameData.metadata.state);
             }
         });
-
         // Handle state changes
-        this.wsClient.onStateChange((state: string, mode: string) => {
+        this.wsClient.onStateChange((state, mode) => {
             console.log(`State change: ${state}, mode: ${mode}`);
             this.updateUIState(state);
             this.updateModeDisplay(mode);
         });
-
         // Handle status updates
-        this.wsClient.onStatus((status: string) => {
+        this.wsClient.onStatus((status) => {
             const statusElement = document.getElementById('connectionStatus');
             if (statusElement) {
                 statusElement.textContent = status;
-
                 // Update color based on status
                 if (status === 'Connected') {
                     statusElement.style.color = '#00ff88';
-                } else if (status.includes('Reconnecting')) {
+                }
+                else if (status.includes('Reconnecting')) {
                     statusElement.style.color = '#ffaa00';
-                } else {
+                }
+                else {
                     statusElement.style.color = '#ff4444';
                 }
             }
         });
     }
-
     /**
      * Setup connection UI
      */
-    private setupConnectionUI(): void {
+    setupConnectionUI() {
         const connectButton = document.getElementById('connectButton');
-        const ipInput = document.getElementById('deviceIP') as HTMLInputElement;
-
+        const ipInput = document.getElementById('deviceIP');
         if (connectButton && ipInput) {
             connectButton.addEventListener('click', () => {
                 const ip = ipInput.value.trim();
@@ -97,14 +79,13 @@ class App {
             });
         }
     }
-
     /**
      * Try to auto-connect using saved IP
      */
-    private tryAutoConnect(): void {
+    tryAutoConnect() {
         const savedIP = localStorage.getItem('deviceIP');
         if (savedIP) {
-            const ipInput = document.getElementById('deviceIP') as HTMLInputElement;
+            const ipInput = document.getElementById('deviceIP');
             if (ipInput) {
                 ipInput.value = savedIP;
             }
@@ -112,11 +93,10 @@ class App {
             this.wsClient.connect(savedIP);
         }
     }
-
     /**
      * Update mode display
      */
-    private updateModeDisplay(mode: string): void {
+    updateModeDisplay(mode) {
         const modeElement = document.getElementById('modeDisplay');
         if (modeElement) {
             let modeText = '';
@@ -136,19 +116,18 @@ class App {
             modeElement.textContent = modeText;
         }
     }
-
     /**
      * Update UI based on capture state
      */
-    private updateUIState(state: string): void {
+    updateUIState(state) {
         const captureActions = document.getElementById('captureActions');
-
         if (state === 'frozen') {
             // Show confirm/retake buttons
             if (captureActions) {
                 captureActions.style.display = 'flex';
             }
-        } else if (state === 'live' || state === 'saved') {
+        }
+        else if (state === 'live' || state === 'saved') {
             // Hide confirm/retake buttons
             if (captureActions) {
                 captureActions.style.display = 'none';
@@ -156,12 +135,13 @@ class App {
         }
     }
 }
-
 // Initialize app when DOM ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         new App();
     });
-} else {
+}
+else {
     new App();
 }
+//# sourceMappingURL=index.js.map

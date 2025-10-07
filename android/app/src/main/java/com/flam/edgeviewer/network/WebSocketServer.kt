@@ -48,7 +48,8 @@ class WebSocketServer {
         val fps: Float,
         val processingTimeMs: Float,
         val timestamp: Long,
-        val mode: String  // "raw", "edges", or "grayscale"
+        val mode: String,  // "raw", "edges", or "grayscale"
+        val state: String = "live"  // "live", "frozen", or "saved"
     )
 
     /**
@@ -154,6 +155,7 @@ class WebSocketServer {
      * @param fps Current FPS
      * @param processingTimeMs Processing time in milliseconds
      * @param mode Processing mode ("raw", "edges", "grayscale")
+     * @param state Frame state ("live", "frozen", "saved")
      */
     fun sendFrame(
         frameData: ByteArray,
@@ -162,7 +164,8 @@ class WebSocketServer {
         channels: Int,
         fps: Float,
         processingTimeMs: Float,
-        mode: String
+        mode: String,
+        state: String = "live"
     ) {
         serverScope.launch {
             try {
@@ -201,7 +204,8 @@ class WebSocketServer {
                         fps = fps,
                         processingTimeMs = processingTimeMs,
                         timestamp = System.currentTimeMillis(),
-                        mode = mode
+                        mode = mode,
+                        state = state
                     ),
                     imageData = base64Image
                 )
@@ -211,6 +215,41 @@ class WebSocketServer {
 
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to process frame", e)
+            }
+        }
+    }
+
+    /**
+     * Send state change notification to all clients
+     */
+    fun sendStateChange(state: String, mode: String) {
+        serverScope.launch {
+            val connections = synchronized(activeConnections) {
+                activeConnections.toList()
+            }
+
+            if (connections.isEmpty()) {
+                return@launch
+            }
+
+            val stateChangeMessage = mapOf(
+                "type" to "stateChange",
+                "state" to state,
+                "mode" to mode,
+                "timestamp" to System.currentTimeMillis()
+            )
+
+            val json = gson.toJson(stateChangeMessage)
+
+            connections.forEach { session ->
+                launch {
+                    try {
+                        session.send(Frame.Text(json))
+                        Log.d(TAG, "Sent state change: $state")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to send state change", e)
+                    }
+                }
             }
         }
     }

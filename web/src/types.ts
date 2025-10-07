@@ -19,6 +19,9 @@ export interface FrameMetadata {
 
     /** Optional processing mode */
     mode?: 'raw' | 'edges' | 'grayscale';
+
+    /** Frame state */
+    state?: 'live' | 'frozen' | 'saved';
 }
 
 /**
