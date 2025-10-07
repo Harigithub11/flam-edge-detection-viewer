@@ -20,8 +20,8 @@ class CameraManager(
 ) {
     companion object {
         private const val TAG = "CameraManager"
-        private const val TARGET_WIDTH = 1280
-        private const val TARGET_HEIGHT = 720
+        private const val TARGET_WIDTH = 640
+        private const val TARGET_HEIGHT = 480
     }
 
     private var cameraDevice: CameraDevice? = null

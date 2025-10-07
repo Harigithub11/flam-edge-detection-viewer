@@ -24,7 +24,8 @@ class WebSocketServer {
     companion object {
         private const val TAG = "WebSocketServer"
         private const val PORT = 8080
-        private const val MAX_FRAME_QUEUE_SIZE = 3
+        private const val MAX_FRAME_QUEUE_SIZE = 1  // Keep only latest frame
+        private const val JPEG_QUALITY = 60  // Reduce from 85 to 60 for faster encoding
     }
 
     private var server: NettyApplicationEngine? = null
@@ -192,7 +193,7 @@ class WebSocketServer {
 
                 // Compress to JPEG for efficient transmission
                 val outputStream = ByteArrayOutputStream()
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, outputStream)
                 val jpegBytes = outputStream.toByteArray()
                 val base64Image = Base64.encodeToString(jpegBytes, Base64.NO_WRAP)
 

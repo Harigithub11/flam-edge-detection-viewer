@@ -63,12 +63,12 @@ void ImageProcessor::cannyEdgeDetection(
         gray = input;
     }
 
-    // Apply Gaussian blur for noise reduction
-    cv::GaussianBlur(gray, blurred, cv::Size(5, 5), 1.5);
+    // Apply Gaussian blur for noise reduction (reduced from 5x5 to 3x3 for speed)
+    cv::GaussianBlur(gray, blurred, cv::Size(3, 3), 1.0);
 
-    // Canny edge detection
+    // Canny edge detection (optimized thresholds and aperture for speed)
     // Parameters: low threshold = 50, high threshold = 150, aperture = 3
-    cv::Canny(blurred, output, 50, 150, 3);
+    cv::Canny(blurred, output, 50, 150, 3, false);  // L2gradient=false for speed
 
     LOGD("Canny edge detection completed");
 }

@@ -66,6 +66,10 @@ class MainActivity : AppCompatActivity() {
     private var frozenFrameHeight: Int = 0
     private var frozenFrameChannels: Int = 1
 
+    // Frame processing throttle
+    @Volatile
+    private var isProcessingFrame = false
+
     companion object {
         private const val TAG = "MainActivity"
 
@@ -316,11 +320,19 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "Processing thread started")
 
             while (isProcessingActive) {
+                // Skip frame if still processing previous one
+                if (isProcessingFrame) {
+                    Thread.sleep(5)
+                    continue
+                }
+
                 // Get latest frame (discard older frames)
                 val frame = frameBuffer.getLatestFrame()
 
                 if (frame != null) {
+                    isProcessingFrame = true
                     processFrame(frame.data, frame.width, frame.height)
+                    isProcessingFrame = false
                 } else {
                     // No frame available, wait briefly
                     Thread.sleep(10)
