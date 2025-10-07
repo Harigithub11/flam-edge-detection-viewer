@@ -314,7 +314,7 @@ class MainActivity : AppCompatActivity() {
                 height = height,
                 channels = channels,
                 fps = currentFps,
-                processingTimeMs = totalTime,
+                processingTimeMs = totalTime.toFloat(),
                 mode = modeString
             )
 
