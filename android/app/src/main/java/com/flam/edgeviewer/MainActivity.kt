@@ -8,8 +8,16 @@ import android.util.Log
 import android.opengl.GLSurfaceView
 import com.flam.edgeviewer.databinding.ActivityMainBinding
 import com.flam.edgeviewer.utils.PermissionHelper
+import com.flam.edgeviewer.utils.FrameBuffer
+import com.flam.edgeviewer.utils.FPSCounter
+import com.flam.edgeviewer.utils.PerformanceMonitor
+import com.flam.edgeviewer.utils.FrameExporter
 import com.flam.edgeviewer.processing.FrameProcessor
 import com.flam.edgeviewer.gl.GLRenderer
+import android.graphics.Color
+import com.google.android.material.floatingactionbutton.FloatingActionButton
+import android.widget.TextView
+import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
 
@@ -19,9 +27,31 @@ class MainActivity : AppCompatActivity() {
     private var cameraManager: com.flam.edgeviewer.camera.CameraManager? = null
     private val frameProcessor = FrameProcessor()
 
-    private var frameCount = 0
-    private var lastFpsTime = System.currentTimeMillis()
-    private val fpsUpdateInterval = 500 // Update FPS every 500ms
+    // Double buffering
+    private val frameBuffer = FrameBuffer()
+    private var processingThread: Thread? = null
+    private var isProcessingActive = false
+
+    // FPS tracking with nanoseconds
+    private val fpsCounter = FPSCounter()
+
+    // Performance monitoring
+    private val perfMonitor = PerformanceMonitor()
+    private var perfFrameCount = 0
+
+    // Mode switching
+    private var currentMode = FrameProcessor.MODE_EDGES
+    private val modeNames = mapOf(
+        FrameProcessor.MODE_RAW to "Raw",
+        FrameProcessor.MODE_EDGES to "Edges",
+        FrameProcessor.MODE_GRAYSCALE to "Grayscale"
+    )
+
+    // Frame export
+    private lateinit var frameExporter: FrameExporter
+    private var lastProcessedFrame: ByteArray? = null
+    private var lastFrameWidth: Int = 0
+    private var lastFrameHeight: Int = 0
 
     companion object {
         private const val TAG = "MainActivity"
@@ -58,11 +88,97 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        // Initialize frame exporter
+        frameExporter = FrameExporter(this)
+
+        // Setup mode toggle
+        setupModeToggle()
+
+        // Setup export button (long press on FAB)
+        setupExportButton()
+
         // Check and request camera permission
         if (PermissionHelper.hasCameraPermission(this)) {
             initializeCamera()
         } else {
             PermissionHelper.requestCameraPermission(this)
+        }
+    }
+
+    private fun setupModeToggle() {
+        val modeFab = binding.modeToggleFab
+        val modeText = binding.modeText
+
+        modeFab.setOnClickListener {
+            // Cycle through modes
+            currentMode = when (currentMode) {
+                FrameProcessor.MODE_RAW -> FrameProcessor.MODE_EDGES
+                FrameProcessor.MODE_EDGES -> FrameProcessor.MODE_GRAYSCALE
+                FrameProcessor.MODE_GRAYSCALE -> FrameProcessor.MODE_RAW
+                else -> FrameProcessor.MODE_EDGES
+            }
+
+            // Update UI
+            updateModeUI()
+
+            // Log mode change
+            Log.d(TAG, "Mode changed to: ${modeNames[currentMode]}")
+        }
+
+        // Initialize UI
+        updateModeUI()
+    }
+
+    private fun updateModeUI() {
+        val modeName = modeNames[currentMode] ?: "Unknown"
+        binding.modeText.text = "Mode: $modeName"
+
+        // Change icon based on mode
+        val iconRes = when (currentMode) {
+            FrameProcessor.MODE_RAW -> R.drawable.ic_camera
+            FrameProcessor.MODE_EDGES -> R.drawable.ic_filter
+            FrameProcessor.MODE_GRAYSCALE -> R.drawable.ic_grayscale
+            else -> R.drawable.ic_filter
+        }
+        binding.modeToggleFab.setImageResource(iconRes)
+
+        // Animate button
+        binding.modeToggleFab.animate()
+            .scaleX(0.8f)
+            .scaleY(0.8f)
+            .setDuration(100)
+            .withEndAction {
+                binding.modeToggleFab.animate()
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .setDuration(100)
+                    .start()
+            }
+            .start()
+    }
+
+    private fun setupExportButton() {
+        binding.modeToggleFab.setOnLongClickListener {
+            exportCurrentFrame()
+            true
+        }
+    }
+
+    private fun exportCurrentFrame() {
+        val frame = lastProcessedFrame
+        if (frame != null) {
+            val success = frameExporter.exportFrame(frame, lastFrameWidth, lastFrameHeight)
+
+            runOnUiThread {
+                val message = if (success) {
+                    "Frame exported successfully"
+                } else {
+                    "Failed to export frame"
+                }
+                Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(this, "No frame to export", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -86,61 +202,105 @@ class MainActivity : AppCompatActivity() {
         // CameraManager no longer needs TextureView
         cameraManager = com.flam.edgeviewer.camera.CameraManager(this, null)
 
-        // Set frame callback
+        // Set frame callback - non-blocking, just add to buffer
         cameraManager?.onFrameAvailable = { frameData, width, height ->
-            processFrame(frameData, width, height)
+            // Add frame to buffer (camera thread)
+            val added = frameBuffer.putFrame(frameData, width, height)
+            if (!added) {
+                Log.d(TAG, "Frame dropped - buffer full")
+            }
         }
+
+        // Start processing thread
+        startProcessingThread()
 
         cameraManager?.openCamera()
     }
 
+    private fun startProcessingThread() {
+        isProcessingActive = true
+        processingThread = thread(name = "FrameProcessor") {
+            Log.d(TAG, "Processing thread started")
+
+            while (isProcessingActive) {
+                // Get latest frame (discard older frames)
+                val frame = frameBuffer.getLatestFrame()
+
+                if (frame != null) {
+                    processFrame(frame.data, frame.width, frame.height)
+                } else {
+                    // No frame available, wait briefly
+                    Thread.sleep(10)
+                }
+            }
+
+            Log.d(TAG, "Processing thread stopped")
+        }
+    }
+
     private fun processFrame(frame: ByteArray, width: Int, height: Int) {
         Log.d(TAG, "processFrame called: width=$width, height=$height, frameSize=${frame.size}")
-        val startTime = System.currentTimeMillis()
 
-        // Process frame via JNI
+        // Start performance monitoring
+        perfMonitor.start()
+
+        // Process frame via JNI with current mode
         val processedFrame = frameProcessor.processFrame(
             frame,
             width,
             height,
-            FrameProcessor.MODE_EDGES
+            currentMode
         )
+        perfMonitor.mark("Processing")
 
         // Update OpenGL texture with processed frame
         if (processedFrame != null) {
             Log.d(TAG, "Processed frame received: size=${processedFrame.size}")
+
+            // Save for export
+            lastProcessedFrame = processedFrame
+            lastFrameWidth = width
+            lastFrameHeight = height
+
             glRenderer.updateFrame(processedFrame, width, height)
+            perfMonitor.mark("Texture Upload")
 
             Log.d(TAG, "Calling glSurfaceView.requestRender()")
             // Request render
             glSurfaceView.requestRender()
+            perfMonitor.mark("Render")
             Log.d(TAG, "glSurfaceView.requestRender() completed")
 
             // Update FPS counter
-            updateFps()
+            val fps = fpsCounter.tick()
+            if (fps >= 0) {
+                runOnUiThread {
+                    // Format FPS with one decimal place
+                    binding.fpsText.text = "FPS: ${String.format("%.1f", fps)}"
+
+                    // Color code based on performance
+                    binding.fpsText.setTextColor(when {
+                        fps >= 15 -> Color.GREEN  // Good performance
+                        fps >= 10 -> Color.YELLOW // Acceptable
+                        else -> Color.RED         // Poor performance
+                    })
+                }
+            }
 
             // Update processing time
-            val processingTime = System.currentTimeMillis() - startTime
+            val totalTime = perfMonitor.getTotalTime()
             runOnUiThread {
-                binding.processingTimeText.text = "Processing: $processingTime ms"
+                binding.processingTimeText.text = "Processing: $totalTime ms"
+            }
+
+            // Log detailed timing every 60 frames
+            perfFrameCount++
+            if (perfFrameCount >= 60) {
+                perfMonitor.logTimings()
+                perfFrameCount = 0
             }
         } else {
             Log.e(TAG, "Frame processing failed")
-        }
-    }
-
-    private fun updateFps() {
-        frameCount++
-        val currentTime = System.currentTimeMillis()
-        val elapsedTime = currentTime - lastFpsTime
-
-        if (elapsedTime >= fpsUpdateInterval) {
-            val fps = (frameCount * 1000.0 / elapsedTime).toInt()
-            runOnUiThread {
-                binding.fpsText.text = "FPS: $fps"
-            }
-            frameCount = 0
-            lastFpsTime = currentTime
         }
     }
 
@@ -173,8 +333,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+
+        // Stop processing thread
+        isProcessingActive = false
+        processingThread?.join(1000) // Wait up to 1 second
+
         glSurfaceView.onPause()
         cameraManager?.release()
+        frameBuffer.clear()
     }
 
     override fun onResume() {
@@ -184,6 +350,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+
+        // Ensure processing thread stopped
+        isProcessingActive = false
+        processingThread?.join(1000)
+
         frameProcessor.release()
         glRenderer.release()
     }
