@@ -51,10 +51,18 @@
                             <p>Waiting for exported frame...</p>
                         </div>
                     </div>
-                    <!-- Download Button (hidden by default, shown when frame is exported) -->
-                    <button id="downloadBtn" class="download-btn" style="display: none;" title="Download Frame">
-                        ⬇️ Download
-                    </button>
+                    <!-- Control Buttons (hidden by default, shown when frame is exported) -->
+                    <div id="frameControls" class="frame-controls" style="display: none;">
+                        <button id="rotateBtn" class="control-btn rotate-btn" title="Rotate Frame 90°">
+                            🔄 Rotate
+                        </button>
+                        <button id="downloadBtn" class="control-btn download-btn" title="Download Frame">
+                            ⬇️ Download
+                        </button>
+                        <button id="resetBtn" class="control-btn reset-btn" title="Reset Viewer">
+                            ♻️ Reset
+                        </button>
+                    </div>
                 </div>
             </section>
 

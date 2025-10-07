@@ -169,33 +169,66 @@ body {
     position: relative;
 }
 
-/* Download Button */
-.download-btn {
+/* Frame Controls */
+.frame-controls {
     position: absolute;
     bottom: 30px;
     left: 50%;
     transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    z-index: 10;
+}
+
+.control-btn {
     padding: 12px 24px;
     border: none;
     border-radius: 8px;
-    background: #00ff88;
-    color: #000000;
     font-size: 1rem;
     font-weight: bold;
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s, background 0.3s;
-    box-shadow: 0 4px 16px rgba(0, 255, 136, 0.4);
-    z-index: 10;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.control-btn:active {
+    transform: translateY(2px);
+}
+
+/* Rotate Button */
+.rotate-btn {
+    background: #667eea;
+    color: #ffffff;
+}
+
+.rotate-btn:hover {
+    background: #5568d3;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(102, 126, 234, 0.6);
+}
+
+/* Download Button */
+.download-btn {
+    background: #00ff88;
+    color: #000000;
 }
 
 .download-btn:hover {
     background: #00cc6a;
-    transform: translateX(-50%) translateY(-2px);
+    transform: translateY(-2px);
     box-shadow: 0 6px 24px rgba(0, 255, 136, 0.6);
 }
 
-.download-btn:active {
-    transform: translateX(-50%) translateY(0);
+/* Reset Button */
+.reset-btn {
+    background: #ff6b6b;
+    color: #ffffff;
+}
+
+.reset-btn:hover {
+    background: #ee5a52;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(255, 107, 107, 0.6);
 }
 
 canvas {

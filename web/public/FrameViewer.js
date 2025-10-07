@@ -3,6 +3,9 @@
  */
 export class FrameViewer {
     constructor(config) {
+        this.currentRotation = 0; // Track rotation in degrees (0, 90, 180, 270)
+        this.currentImage = null; // Store current image for rotation
+        this.currentMetadata = null; // Store metadata
         this.config = config;
         // Get canvas element
         const canvasElement = document.getElementById(this.config.canvasId);
@@ -26,20 +29,26 @@ export class FrameViewer {
     displayFrame(frameData) {
         const img = new Image();
         img.onload = () => {
+            // Store current image and metadata for rotation
+            this.currentImage = img;
+            this.currentMetadata = frameData.metadata;
+            this.currentRotation = 0; // Reset rotation on new frame
             const frameWidth = frameData.metadata.width;
             const frameHeight = frameData.metadata.height;
+            const isLandscape = frameData.metadata.isLandscape || false;
             // Hide placeholder, show canvas
             if (this.placeholder) {
                 this.placeholder.classList.add('hidden');
             }
             this.canvas.classList.add('visible');
-            // Check if Android is in portrait (sends wide image)
-            const isAndroidPortrait = frameWidth > frameHeight;
-            if (isAndroidPortrait) {
-                this.displayPortraitFrame(img, frameWidth, frameHeight);
+            // Use device orientation to determine display
+            // Portrait: rotate 90° clockwise to make it tall
+            // Landscape: display as-is (wide)
+            if (isLandscape) {
+                this.displayLandscapeFrame(img, frameWidth, frameHeight);
             }
             else {
-                this.displayLandscapeFrame(img, frameWidth, frameHeight);
+                this.displayPortraitFrame(img, frameWidth, frameHeight);
             }
         };
         img.onerror = (error) => {
@@ -114,6 +123,73 @@ export class FrameViewer {
             width: this.canvas.width,
             height: this.canvas.height
         };
+    }
+    /**
+     * Rotate the current frame by 90 degrees clockwise
+     */
+    rotateFrame() {
+        if (!this.currentImage || !this.currentMetadata) {
+            console.warn('No frame to rotate');
+            return;
+        }
+        // Increment rotation by 90 degrees
+        this.currentRotation = (this.currentRotation + 90) % 360;
+        // Redraw with new rotation
+        this.renderFrameWithRotation();
+        console.log(`Frame rotated to ${this.currentRotation}°`);
+    }
+    /**
+     * Render frame with current rotation
+     */
+    renderFrameWithRotation() {
+        if (!this.currentImage || !this.currentMetadata)
+            return;
+        const frameWidth = this.currentMetadata.width;
+        const frameHeight = this.currentMetadata.height;
+        const isLandscape = this.currentMetadata.isLandscape || false;
+        // Calculate total rotation (base rotation + user rotation)
+        let totalRotation = this.currentRotation;
+        // Add base rotation for portrait mode (90 degrees)
+        if (!isLandscape) {
+            totalRotation += 90;
+        }
+        // Normalize to 0-360
+        totalRotation = totalRotation % 360;
+        // Set canvas dimensions based on total rotation
+        if (totalRotation === 90 || totalRotation === 270) {
+            // Swap dimensions for 90/270 rotation
+            this.canvas.width = frameHeight;
+            this.canvas.height = frameWidth;
+        }
+        else {
+            // Normal dimensions for 0/180 rotation
+            this.canvas.width = frameWidth;
+            this.canvas.height = frameHeight;
+        }
+        // Clear and draw
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.save();
+        this.ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
+        this.ctx.rotate(totalRotation * Math.PI / 180);
+        this.ctx.drawImage(this.currentImage, -frameWidth / 2, -frameHeight / 2);
+        this.ctx.restore();
+    }
+    /**
+     * Reset viewer to initial state (show placeholder)
+     */
+    reset() {
+        // Clear current frame data
+        this.currentImage = null;
+        this.currentMetadata = null;
+        this.currentRotation = 0;
+        // Clear canvas
+        this.clear();
+        // Hide canvas, show placeholder
+        this.canvas.classList.remove('visible');
+        if (this.placeholder) {
+            this.placeholder.classList.remove('hidden');
+        }
+        console.log('Viewer reset');
     }
 }
 //# sourceMappingURL=FrameViewer.js.map

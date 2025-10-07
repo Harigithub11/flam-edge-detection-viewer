@@ -22,6 +22,9 @@ export interface FrameMetadata {
 
     /** Frame state */
     state?: 'live' | 'frozen' | 'saved';
+
+    /** Device orientation when frame was captured */
+    isLandscape?: boolean;
 }
 
 /**

@@ -50,7 +50,8 @@ class WebSocketServer {
         val processingTimeMs: Float,
         val timestamp: Long,
         val mode: String,  // "raw", "edges", or "grayscale"
-        val state: String = "live"  // "live", "frozen", or "saved"
+        val state: String = "live",  // "live", "frozen", or "saved"
+        val isLandscape: Boolean = false  // Device orientation when captured
     )
 
     /**
@@ -157,6 +158,7 @@ class WebSocketServer {
      * @param processingTimeMs Processing time in milliseconds
      * @param mode Processing mode ("raw", "edges", "grayscale")
      * @param state Frame state ("live", "frozen", "saved")
+     * @param isLandscape Device orientation when frame captured
      */
     fun sendFrame(
         frameData: ByteArray,
@@ -166,7 +168,8 @@ class WebSocketServer {
         fps: Float,
         processingTimeMs: Float,
         mode: String,
-        state: String = "live"
+        state: String = "live",
+        isLandscape: Boolean = false
     ) {
         serverScope.launch {
             try {
@@ -206,7 +209,8 @@ class WebSocketServer {
                         processingTimeMs = processingTimeMs,
                         timestamp = System.currentTimeMillis(),
                         mode = mode,
-                        state = state
+                        state = state,
+                        isLandscape = isLandscape
                     ),
                     imageData = base64Image
                 )

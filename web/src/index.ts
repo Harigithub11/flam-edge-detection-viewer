@@ -28,8 +28,8 @@ class App {
         // Setup connection UI
         this.setupConnectionUI();
 
-        // Setup download button
-        this.setupDownloadButton();
+        // Setup control buttons (rotate, download, reset)
+        this.setupControlButtons();
 
         // Try to connect if device IP is provided
         this.tryAutoConnect();
@@ -141,12 +141,22 @@ class App {
     }
 
     /**
-     * Setup download button
+     * Setup control buttons (rotate, download, reset)
      */
-    private setupDownloadButton(): void {
+    private setupControlButtons(): void {
+        const rotateBtn = document.getElementById('rotateBtn');
         const downloadBtn = document.getElementById('downloadBtn');
+        const resetBtn = document.getElementById('resetBtn');
         const canvas = document.getElementById('frameCanvas') as HTMLCanvasElement;
 
+        // Rotate button
+        if (rotateBtn) {
+            rotateBtn.addEventListener('click', () => {
+                this.viewer.rotateFrame();
+            });
+        }
+
+        // Download button
         if (downloadBtn && canvas) {
             downloadBtn.addEventListener('click', () => {
                 canvas.toBlob((blob) => {
@@ -161,23 +171,35 @@ class App {
                 });
             });
         }
+
+        // Reset button
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                this.viewer.reset();
+                // Hide control buttons when reset
+                const frameControls = document.getElementById('frameControls');
+                if (frameControls) {
+                    frameControls.style.display = 'none';
+                }
+            });
+        }
     }
 
     /**
      * Update UI based on capture state
      */
     private updateUIState(state: string): void {
-        const downloadBtn = document.getElementById('downloadBtn');
+        const frameControls = document.getElementById('frameControls');
 
         if (state === 'exported') {
-            // Show download button for exported frame
-            if (downloadBtn) {
-                downloadBtn.style.display = 'block';
+            // Show control buttons for exported frame
+            if (frameControls) {
+                frameControls.style.display = 'flex';
             }
         } else {
-            // Hide download button for other states
-            if (downloadBtn) {
-                downloadBtn.style.display = 'none';
+            // Hide control buttons for other states
+            if (frameControls) {
+                frameControls.style.display = 'none';
             }
         }
     }

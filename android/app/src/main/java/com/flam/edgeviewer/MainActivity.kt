@@ -257,7 +257,11 @@ class MainActivity : AppCompatActivity() {
     private fun exportToWeb() {
         val frame = frozenFrame
         if (frame != null) {
-            // Send frozen frame to web viewer
+            // Get current device orientation from resources (how user is holding phone)
+            val isLandscape = (resources.configuration.orientation ==
+                              android.content.res.Configuration.ORIENTATION_LANDSCAPE)
+
+            // Send frozen frame to web viewer with orientation
             val currentFps = fpsCounter.getCurrentFPS()
             val modeString = when (currentMode) {
                 FrameProcessor.MODE_RAW -> "raw"
@@ -274,14 +278,15 @@ class MainActivity : AppCompatActivity() {
                 fps = currentFps,
                 processingTimeMs = 0f,
                 mode = modeString,
-                state = "exported"
+                state = "exported",
+                isLandscape = isLandscape
             )
 
             runOnUiThread {
                 Toast.makeText(this, "Frame exported to web", Toast.LENGTH_SHORT).show()
             }
 
-            Log.d(TAG, "Frame exported to web")
+            Log.d(TAG, "Frame exported to web (landscape: $isLandscape)")
         }
 
         // Resume live feed after exporting
