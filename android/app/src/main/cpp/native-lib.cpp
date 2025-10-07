@@ -74,8 +74,17 @@ Java_com_flam_edgeviewer_processing_FrameProcessor_processFrameNative(
     // Performance timing
     auto startTime = std::chrono::high_resolution_clock::now();
 
-    // Get input array using GetPrimitiveArrayCritical for zero-copy access
-    // CRITICAL SECTION: No JNI calls allowed between Get/ReleasePrimitiveArrayCritical
+    // BEST PRACTICE: Get array size BEFORE critical section (no JNI calls allowed inside)
+    jsize inputSize = env->GetArrayLength(inputFrame);
+
+    // Validate input size
+    if (inputSize < width * height) {
+        LOGE("Invalid input size: %d, expected at least: %d", inputSize, width * height);
+        return nullptr;
+    }
+
+    // CRITICAL SECTION START: Get input array using GetPrimitiveArrayCritical
+    // Rules: NO JNI calls, NO GC, minimal operations only
     jboolean isCopy = JNI_FALSE;
     jbyte* inputBytes = reinterpret_cast<jbyte*>(
         env->GetPrimitiveArrayCritical(inputFrame, &isCopy)
@@ -86,37 +95,28 @@ Java_com_flam_edgeviewer_processing_FrameProcessor_processFrameNative(
         return nullptr;
     }
 
-    jsize inputSize = env->GetArrayLength(inputFrame);
-
-    // YUV_420_888 format from camera
-    // Y plane is full resolution (width * height)
-    // UV planes are half resolution
-    // Total size = width * height * 1.5
-
-    // Extract Y plane (grayscale) from YUV data
-    // Y plane is the first width*height bytes
+    // CRITICAL SECTION: Only wrap data, NO processing
+    // YUV_420_888 format: Y plane is first width*height bytes (grayscale)
     cv::Mat yPlane(height, width, CV_8UC1, inputBytes);
 
-    // Create a copy since we'll release the input array
+    // Clone the data to make independent copy
     cv::Mat inputMat = yPlane.clone();
 
-    // Process frame
+    // CRITICAL SECTION END: Release immediately after cloning
+    env->ReleasePrimitiveArrayCritical(inputFrame, inputBytes, JNI_ABORT);
+
+    // OUTSIDE CRITICAL SECTION: Now safe to do processing with JNI calls possible
     cv::Mat outputMat;
 
     try {
         ImageProcessor::processFrame(inputMat, outputMat, mode);
     } catch (const cv::Exception& e) {
         LOGE("OpenCV error: %s", e.what());
-        env->ReleasePrimitiveArrayCritical(inputFrame, inputBytes, JNI_ABORT);
         return nullptr;
     } catch (const std::exception& e) {
         LOGE("Error: %s", e.what());
-        env->ReleasePrimitiveArrayCritical(inputFrame, inputBytes, JNI_ABORT);
         return nullptr;
     }
-
-    // Release critical section immediately after processing
-    env->ReleasePrimitiveArrayCritical(inputFrame, inputBytes, JNI_ABORT);
 
     // Convert output to byte array (outside critical section)
     int outputSize = outputMat.total() * outputMat.elemSize();
