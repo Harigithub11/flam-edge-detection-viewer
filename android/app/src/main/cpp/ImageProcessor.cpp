@@ -28,6 +28,12 @@ void ImageProcessor::processFrame(
     int mode
 ) {
     switch (mode) {
+        case MODE_RAW:
+            // Pass through original (RGB color)
+            input.copyTo(output);
+            LOGD("Mode: RAW (pass-through, channels=%d)", input.channels());
+            break;
+
         case MODE_EDGES:
             cannyEdgeDetection(input, output);
             break;
@@ -36,7 +42,6 @@ void ImageProcessor::processFrame(
             grayscaleFilter(input, output);
             break;
 
-        case MODE_RAW:
         default:
             input.copyTo(output);
             break;

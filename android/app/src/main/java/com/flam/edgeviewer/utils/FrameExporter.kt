@@ -23,9 +23,10 @@ class FrameExporter(private val context: Context) {
 
     /**
      * Export frame to PNG
-     * @param frameData Grayscale byte array
+     * @param frameData Byte array (grayscale or RGB)
      * @param width Frame width
      * @param height Frame height
+     * @param channels Number of channels (1=grayscale, 3=RGB)
      * @param filename Optional filename
      * @return true if successful
      */
@@ -33,18 +34,31 @@ class FrameExporter(private val context: Context) {
         frameData: ByteArray,
         width: Int,
         height: Int,
+        channels: Int = 1,
         filename: String = "frame_${System.currentTimeMillis()}.png"
     ): Boolean {
         try {
             // Convert byte array to Bitmap
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
 
-            // For grayscale data, convert to ARGB
             val pixels = IntArray(width * height)
-            for (i in frameData.indices) {
-                val gray = frameData[i].toInt() and 0xFF
-                // ARGB format: (alpha << 24) | (red << 16) | (green << 8) | blue
-                pixels[i] = (0xFF shl 24) or (gray shl 16) or (gray shl 8) or gray
+
+            if (channels == 3) {
+                // RGB data
+                for (i in 0 until width * height) {
+                    val b = frameData[i * 3].toInt() and 0xFF
+                    val g = frameData[i * 3 + 1].toInt() and 0xFF
+                    val r = frameData[i * 3 + 2].toInt() and 0xFF
+                    // ARGB format: (alpha << 24) | (red << 16) | (green << 8) | blue
+                    pixels[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+                }
+            } else {
+                // Grayscale data
+                for (i in frameData.indices) {
+                    val gray = frameData[i].toInt() and 0xFF
+                    // ARGB format: (alpha << 24) | (red << 16) | (green << 8) | blue
+                    pixels[i] = (0xFF shl 24) or (gray shl 16) or (gray shl 8) or gray
+                }
             }
             bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
 

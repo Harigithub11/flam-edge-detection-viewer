@@ -96,14 +96,34 @@ Java_com_flam_edgeviewer_processing_FrameProcessor_processFrameNative(
     }
 
     // CRITICAL SECTION: Only wrap data, NO processing
-    // YUV_420_888 format: Y plane is first width*height bytes (grayscale)
-    cv::Mat yPlane(height, width, CV_8UC1, inputBytes);
+    // For RAW mode, we need full YUV data for color conversion
+    // For other modes, Y plane (grayscale) is sufficient
+    cv::Mat inputMat;
 
-    // Clone the data to make independent copy
-    cv::Mat inputMat = yPlane.clone();
+    if (mode == 0) {  // MODE_RAW - need color
+        // YUV_420_888 format: Y plane (width*height) + VU planes (width*height/2)
+        int ySize = width * height;
+        int uvSize = ySize / 2;
 
-    // CRITICAL SECTION END: Release immediately after cloning
-    env->ReleasePrimitiveArrayCritical(inputFrame, inputBytes, JNI_ABORT);
+        // Create YUV image and clone the data
+        cv::Mat yuvImage(height + height / 2, width, CV_8UC1, inputBytes);
+        cv::Mat yuvCopy = yuvImage.clone();
+
+        // CRITICAL SECTION END: Release immediately after cloning
+        env->ReleasePrimitiveArrayCritical(inputFrame, inputBytes, JNI_ABORT);
+
+        // OUTSIDE CRITICAL SECTION: Convert YUV to RGB (not BGR to fix color swap)
+        cv::Mat bgrMat;
+        cv::cvtColor(yuvCopy, bgrMat, cv::COLOR_YUV2BGR_NV21);
+        cv::cvtColor(bgrMat, inputMat, cv::COLOR_BGR2RGB);
+    } else {
+        // For EDGES and GRAYSCALE modes, Y plane only (grayscale)
+        cv::Mat yPlane(height, width, CV_8UC1, inputBytes);
+        inputMat = yPlane.clone();
+
+        // CRITICAL SECTION END: Release immediately after cloning
+        env->ReleasePrimitiveArrayCritical(inputFrame, inputBytes, JNI_ABORT);
+    }
 
     // OUTSIDE CRITICAL SECTION: Now safe to do processing with JNI calls possible
     cv::Mat outputMat;

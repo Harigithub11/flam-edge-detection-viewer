@@ -63,7 +63,7 @@ class TextureHelper {
         )
     }
 
-    fun updateTexture(textureId: Int, data: ByteArray, width: Int, height: Int) {
+    fun updateTexture(textureId: Int, data: ByteArray, width: Int, height: Int, channels: Int = 1) {
         // Bind texture
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
 
@@ -72,17 +72,23 @@ class TextureHelper {
         buffer.put(data)
         buffer.position(0)
 
+        // Choose format based on channels
+        val format = when (channels) {
+            1 -> GLES20.GL_LUMINANCE    // Grayscale
+            3 -> GLES20.GL_RGB          // RGB (RAW mode)
+            4 -> GLES20.GL_RGBA         // RGBA
+            else -> GLES20.GL_LUMINANCE
+        }
+
         // Upload texture data
-        // For grayscale (Canny output): GL_LUMINANCE
-        // For RGBA: GL_RGBA
         GLES20.glTexImage2D(
             GLES20.GL_TEXTURE_2D,
             0,                              // Mipmap level
-            GLES20.GL_LUMINANCE,            // Internal format
+            format,                         // Internal format
             width,
             height,
             0,                              // Border (must be 0)
-            GLES20.GL_LUMINANCE,            // Format
+            format,                         // Format
             GLES20.GL_UNSIGNED_BYTE,        // Type
             buffer
         )

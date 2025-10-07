@@ -24,6 +24,7 @@ class GLRenderer(private val context: Context) : GLSurfaceView.Renderer {
     private var currentFrame: ByteArray? = null
     private var frameWidth: Int = 0
     private var frameHeight: Int = 0
+    private var frameChannels: Int = 1
     private var frameUpdated: Boolean = false
 
     // Lock for thread-safe frame updates
@@ -73,13 +74,14 @@ class GLRenderer(private val context: Context) : GLSurfaceView.Renderer {
         // Check if we have a frame to render
         synchronized(frameLock) {
             if (frameUpdated && currentFrame != null) {
-                Log.d(TAG, "Updating texture with frame: ${frameWidth}x${frameHeight}")
+                Log.d(TAG, "Updating texture with frame: ${frameWidth}x${frameHeight}, channels=$frameChannels")
                 // Update texture with new frame data
                 textureHelper?.updateTexture(
                     textureId,
                     currentFrame!!,
                     frameWidth,
-                    frameHeight
+                    frameHeight,
+                    frameChannels
                 )
                 frameUpdated = false
             }
@@ -108,12 +110,13 @@ class GLRenderer(private val context: Context) : GLSurfaceView.Renderer {
      * Update frame data (called from camera thread)
      * Thread-safe
      */
-    fun updateFrame(frameData: ByteArray, width: Int, height: Int) {
-        Log.d(TAG, "updateFrame called: ${width}x${height}, dataSize=${frameData.size}")
+    fun updateFrame(frameData: ByteArray, width: Int, height: Int, channels: Int = 1) {
+        Log.d(TAG, "updateFrame called: ${width}x${height}, dataSize=${frameData.size}, channels=$channels")
         synchronized(frameLock) {
             currentFrame = frameData
             frameWidth = width
             frameHeight = height
+            frameChannels = channels
             frameUpdated = true
             Log.d(TAG, "Frame update completed, frameUpdated=$frameUpdated")
         }

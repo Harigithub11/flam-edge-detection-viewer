@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/mode_raw"
+        android:title="Raw" />
+    <item
+        android:id="@+id/mode_edges"
+        android:title="Edges" />
+    <item
+        android:id="@+id/mode_grayscale"
+        android:title="Grayscale" />
+</menu>

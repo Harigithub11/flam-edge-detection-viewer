@@ -17,6 +17,8 @@ import com.flam.edgeviewer.gl.GLRenderer
 import android.graphics.Color
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import android.widget.TextView
+import android.widget.Button
+import android.widget.PopupMenu
 import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
@@ -91,11 +93,11 @@ class MainActivity : AppCompatActivity() {
         // Initialize frame exporter
         frameExporter = FrameExporter(this)
 
-        // Setup mode toggle
-        setupModeToggle()
+        // Setup mode selection button
+        setupModeSelection()
 
-        // Setup export button (long press on FAB)
-        setupExportButton()
+        // Setup capture button
+        setupCaptureButton()
 
         // Check and request camera permission
         if (PermissionHelper.hasCameraPermission(this)) {
@@ -105,24 +107,39 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupModeToggle() {
-        val modeFab = binding.modeToggleFab
-        val modeText = binding.modeText
+    private fun setupModeSelection() {
+        val modeButton = binding.modeButton
 
-        modeFab.setOnClickListener {
-            // Cycle through modes
-            currentMode = when (currentMode) {
-                FrameProcessor.MODE_RAW -> FrameProcessor.MODE_EDGES
-                FrameProcessor.MODE_EDGES -> FrameProcessor.MODE_GRAYSCALE
-                FrameProcessor.MODE_GRAYSCALE -> FrameProcessor.MODE_RAW
-                else -> FrameProcessor.MODE_EDGES
+        modeButton.setOnClickListener { view ->
+            // Create popup menu
+            val popup = PopupMenu(this, view)
+            popup.menuInflater.inflate(R.menu.mode_menu, popup.menu)
+
+            // Set menu item click listener
+            popup.setOnMenuItemClickListener { menuItem ->
+                when (menuItem.itemId) {
+                    R.id.mode_raw -> {
+                        currentMode = FrameProcessor.MODE_RAW
+                        updateModeUI()
+                        true
+                    }
+                    R.id.mode_edges -> {
+                        currentMode = FrameProcessor.MODE_EDGES
+                        updateModeUI()
+                        true
+                    }
+                    R.id.mode_grayscale -> {
+                        currentMode = FrameProcessor.MODE_GRAYSCALE
+                        updateModeUI()
+                        true
+                    }
+                    else -> false
+                }
             }
 
-            // Update UI
-            updateModeUI()
-
-            // Log mode change
-            Log.d(TAG, "Mode changed to: ${modeNames[currentMode]}")
+            // Show popup above the button
+            popup.gravity = android.view.Gravity.TOP
+            popup.show()
         }
 
         // Initialize UI
@@ -131,54 +148,32 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateModeUI() {
         val modeName = modeNames[currentMode] ?: "Unknown"
-        binding.modeText.text = "Mode: $modeName"
-
-        // Change icon based on mode
-        val iconRes = when (currentMode) {
-            FrameProcessor.MODE_RAW -> R.drawable.ic_camera
-            FrameProcessor.MODE_EDGES -> R.drawable.ic_filter
-            FrameProcessor.MODE_GRAYSCALE -> R.drawable.ic_grayscale
-            else -> R.drawable.ic_filter
-        }
-        binding.modeToggleFab.setImageResource(iconRes)
-
-        // Animate button
-        binding.modeToggleFab.animate()
-            .scaleX(0.8f)
-            .scaleY(0.8f)
-            .setDuration(100)
-            .withEndAction {
-                binding.modeToggleFab.animate()
-                    .scaleX(1f)
-                    .scaleY(1f)
-                    .setDuration(100)
-                    .start()
-            }
-            .start()
+        binding.modeButton.text = "Mode: $modeName"
+        Log.d(TAG, "Mode changed to: $modeName")
     }
 
-    private fun setupExportButton() {
-        binding.modeToggleFab.setOnLongClickListener {
-            exportCurrentFrame()
-            true
+    private fun setupCaptureButton() {
+        binding.captureFab.setOnClickListener {
+            captureFrame()
         }
     }
 
-    private fun exportCurrentFrame() {
+    private fun captureFrame() {
         val frame = lastProcessedFrame
         if (frame != null) {
-            val success = frameExporter.exportFrame(frame, lastFrameWidth, lastFrameHeight)
+            val channels = if (currentMode == FrameProcessor.MODE_RAW) 3 else 1
+            val success = frameExporter.exportFrame(frame, lastFrameWidth, lastFrameHeight, channels)
 
             runOnUiThread {
                 val message = if (success) {
-                    "Frame exported successfully"
+                    "Frame captured and saved"
                 } else {
-                    "Failed to export frame"
+                    "Failed to capture frame"
                 }
                 Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
             }
         } else {
-            Toast.makeText(this, "No frame to export", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "No frame to capture", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -262,7 +257,10 @@ class MainActivity : AppCompatActivity() {
             lastFrameWidth = width
             lastFrameHeight = height
 
-            glRenderer.updateFrame(processedFrame, width, height)
+            // Determine channels based on mode
+            val channels = if (currentMode == FrameProcessor.MODE_RAW) 3 else 1
+
+            glRenderer.updateFrame(processedFrame, width, height, channels)
             perfMonitor.mark("Texture Upload")
 
             Log.d(TAG, "Calling glSurfaceView.requestRender()")
