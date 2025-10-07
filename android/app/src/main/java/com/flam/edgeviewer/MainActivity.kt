@@ -14,6 +14,7 @@ import com.flam.edgeviewer.utils.PerformanceMonitor
 import com.flam.edgeviewer.utils.FrameExporter
 import com.flam.edgeviewer.processing.FrameProcessor
 import com.flam.edgeviewer.gl.GLRenderer
+import com.flam.edgeviewer.network.WebSocketServer
 import android.graphics.Color
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import android.widget.TextView
@@ -55,6 +56,9 @@ class MainActivity : AppCompatActivity() {
     private var lastFrameWidth: Int = 0
     private var lastFrameHeight: Int = 0
 
+    // WebSocket server for real-time streaming
+    private val webSocketServer = WebSocketServer()
+
     companion object {
         private const val TAG = "MainActivity"
 
@@ -64,7 +68,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Native function declarations (for testing)
+    // Native function declarations (for testing)C:\Users\enguv\AppData\Local\Android\Sdk
     external fun stringFromJNI(): String
     external fun getOpenCVVersion(): String
     external fun testNativeProcessing(value: Int): Int
@@ -98,6 +102,10 @@ class MainActivity : AppCompatActivity() {
 
         // Setup capture button
         setupCaptureButton()
+
+        // Start WebSocket server for real-time streaming
+        webSocketServer.start()
+        Log.i(TAG, "WebSocket server starting on port 8080")
 
         // Check and request camera permission
         if (PermissionHelper.hasCameraPermission(this)) {
@@ -291,6 +299,25 @@ class MainActivity : AppCompatActivity() {
                 binding.processingTimeText.text = "Processing: $totalTime ms"
             }
 
+            // Send frame via WebSocket to web viewer
+            val currentFps = fpsCounter.getCurrentFPS()
+            val modeString = when (currentMode) {
+                FrameProcessor.MODE_RAW -> "raw"
+                FrameProcessor.MODE_EDGES -> "edges"
+                FrameProcessor.MODE_GRAYSCALE -> "grayscale"
+                else -> "unknown"
+            }
+
+            webSocketServer.sendFrame(
+                frameData = processedFrame,
+                width = width,
+                height = height,
+                channels = channels,
+                fps = currentFps,
+                processingTimeMs = totalTime,
+                mode = modeString
+            )
+
             // Log detailed timing every 60 frames
             perfFrameCount++
             if (perfFrameCount >= 60) {
@@ -348,6 +375,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+
+        // Stop WebSocket server
+        webSocketServer.stop()
 
         // Ensure processing thread stopped
         isProcessingActive = false

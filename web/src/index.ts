@@ -5,48 +5,78 @@ import { FrameData } from './types.js';
  * Main application entry point
  */
 class App {
-    private viewer: FrameViewer;
+    private rawViewer: FrameViewer;
+    private edgesViewer: FrameViewer;
+    private grayscaleViewer: FrameViewer;
 
     constructor() {
         console.log('🚀 Flam Edge Detection Viewer - Starting...');
 
-        // Initialize viewer
-        this.viewer = new FrameViewer({
-            canvasId: 'frameCanvas',
+        // Initialize three viewers
+        this.rawViewer = new FrameViewer({
+            canvasId: 'rawCanvas',
             showStats: true,
             scalingMode: 'fit'
         });
 
-        // Load sample frame
-        this.loadSampleFrame();
+        this.edgesViewer = new FrameViewer({
+            canvasId: 'edgesCanvas',
+            showStats: true,
+            scalingMode: 'fit'
+        });
+
+        this.grayscaleViewer = new FrameViewer({
+            canvasId: 'grayscaleCanvas',
+            showStats: true,
+            scalingMode: 'fit'
+        });
+
+        // Load sample frames
+        this.loadSampleFrames();
 
         console.log('✅ Application initialized');
     }
 
     /**
-     * Load and display sample frame
+     * Load and display sample frames
      */
-    private loadSampleFrame(): void {
-        // Sample frame data (replace with actual exported frame)
-        const sampleFrame: FrameData = {
-            imageData: './sample-frame.png',  // Path to exported frame
-            metadata: {
-                width: 1280,
-                height: 720,
-                fps: 15.3,
-                processingTimeMs: 45.2,
-                timestamp: Date.now(),
-                mode: 'edges'
-            }
+    private loadSampleFrames(): void {
+        // Sample metadata
+        const metadata = {
+            width: 1280,
+            height: 720,
+            fps: 15.3,
+            processingTimeMs: 45.2,
+            timestamp: Date.now()
         };
 
-        // Display frame
-        this.viewer.displayFrame(sampleFrame);
+        // Raw frame
+        const rawFrame: FrameData = {
+            imageData: './sample-frame-raw.png',
+            metadata: { ...metadata, mode: 'raw' as const }
+        };
 
-        // Update stats
-        this.viewer.updateStats(sampleFrame.metadata);
+        // Edges frame
+        const edgesFrame: FrameData = {
+            imageData: './sample-frame-edges.png',
+            metadata: { ...metadata, mode: 'edges' as const }
+        };
 
-        console.log('Sample frame loaded');
+        // Grayscale frame
+        const grayscaleFrame: FrameData = {
+            imageData: './sample-frame-grayscale.png',
+            metadata: { ...metadata, mode: 'grayscale' as const }
+        };
+
+        // Display frames
+        this.rawViewer.displayFrame(rawFrame);
+        this.edgesViewer.displayFrame(edgesFrame);
+        this.grayscaleViewer.displayFrame(grayscaleFrame);
+
+        // Update stats (using edges frame metadata)
+        this.rawViewer.updateStats(edgesFrame.metadata);
+
+        console.log('Sample frames loaded');
     }
 }
 

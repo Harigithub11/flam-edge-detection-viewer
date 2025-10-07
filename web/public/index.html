@@ -16,11 +16,27 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Frame Viewer Section -->
+            <!-- Frame Viewer Section - Raw -->
             <section class="viewer-section">
-                <h2>Processed Frame</h2>
+                <h2>Raw Camera Feed</h2>
                 <div class="canvas-container">
-                    <canvas id="frameCanvas"></canvas>
+                    <canvas id="rawCanvas"></canvas>
+                </div>
+            </section>
+
+            <!-- Frame Viewer Section - Edges -->
+            <section class="viewer-section">
+                <h2>Edge Detection</h2>
+                <div class="canvas-container">
+                    <canvas id="edgesCanvas"></canvas>
+                </div>
+            </section>
+
+            <!-- Frame Viewer Section - Grayscale -->
+            <section class="viewer-section">
+                <h2>Grayscale</h2>
+                <div class="canvas-container">
+                    <canvas id="grayscaleCanvas"></canvas>
                 </div>
             </section>
 
@@ -67,7 +83,7 @@
 
         <!-- Footer -->
         <footer class="footer">
-            <p>🤖 Flam R&D Internship Assignment | October 2025</p>
+            <p>Flam R&D Internship Assignment | October 2025</p>
         </footer>
     </div>
 
