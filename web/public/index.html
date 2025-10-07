@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flam Edge Detection Viewer - Web Interface</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🎨 Flam Edge Detection Viewer</h1>
+            <p class="subtitle">Real-time Frame Processing & Analysis</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Frame Viewer Section -->
+            <section class="viewer-section">
+                <h2>Processed Frame</h2>
+                <div class="canvas-container">
+                    <canvas id="frameCanvas"></canvas>
+                </div>
+            </section>
+
+            <!-- Stats Section -->
+            <section class="stats-section">
+                <h2>Performance Metrics</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">FPS</div>
+                        <div class="stat-value" id="fpsDisplay">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Resolution</div>
+                        <div class="stat-value" id="resolutionDisplay">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Processing Time</div>
+                        <div class="stat-value" id="processingTimeDisplay">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Timestamp</div>
+                        <div class="stat-value" id="timestampDisplay">--</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Info Section -->
+            <section class="info-section">
+                <h2>About This Viewer</h2>
+                <p>
+                    This web viewer displays processed frames from the
+                    Android Edge Detection application. Frames are processed
+                    using OpenCV C++ with Canny edge detection and rendered
+                    via OpenGL ES 2.0.
+                </p>
+                <div class="tech-stack">
+                    <span class="tech-badge">TypeScript</span>
+                    <span class="tech-badge">HTML5 Canvas</span>
+                    <span class="tech-badge">ES2020</span>
+                    <span class="tech-badge">Modular Architecture</span>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>🤖 Flam R&D Internship Assignment | October 2025</p>
+        </footer>
+    </div>
+
+    <!-- Load compiled TypeScript (as ES module) -->
+    <script type="module" src="../dist/index.js"></script>
+</body>
+</html>
