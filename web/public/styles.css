@@ -38,12 +38,77 @@ body {
 .subtitle {
     font-size: 1.1rem;
     opacity: 0.9;
+    margin-bottom: 20px;
+}
+
+/* Connection Controls */
+.connection-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.ip-input {
+    flex: 1;
+    min-width: 250px;
+    max-width: 400px;
+    padding: 12px 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.3s, background 0.3s;
+}
+
+.ip-input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.ip-input:focus {
+    border-color: #00ff88;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.connect-button {
+    padding: 12px 30px;
+    border: none;
+    border-radius: 8px;
+    background: #00ff88;
+    color: #000000;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s, transform 0.2s;
+}
+
+.connect-button:hover {
+    background: #00cc6a;
+    transform: translateY(-2px);
+}
+
+.connect-button:active {
+    transform: translateY(0);
+}
+
+.connection-status {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+#connectionStatus {
+    font-weight: bold;
+    color: #ff4444;
 }
 
 /* Main Content */
 .main-content {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: 2fr 1fr;
     gap: 20px;
     margin-bottom: 20px;
 }
@@ -64,8 +129,34 @@ body {
 }
 
 .viewer-section h2 {
-    margin-bottom: 20px;
+    margin-bottom: 15px;
     font-size: 1.5rem;
+}
+
+/* Mode Indicator */
+.mode-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding: 12px 20px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    border-left: 4px solid #00ff88;
+}
+
+.mode-label {
+    font-size: 0.9rem;
+    opacity: 0.8;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.mode-value {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #00ff88;
+    text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
 }
 
 .canvas-container {

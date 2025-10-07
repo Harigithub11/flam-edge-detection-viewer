@@ -8,7 +8,9 @@
     "build": "tsc",
     "watch": "tsc --watch",
     "clean": "rm -rf dist",
-    "rebuild": "npm run clean && npm run build"
+    "rebuild": "npm run clean && npm run build",
+    "sync": "node sync-frames.js",
+    "sync:watch": "node sync-frames.js --watch"
   },
   "keywords": ["typescript", "canvas", "image-processing", "flam"],
   "author": "Your Name",

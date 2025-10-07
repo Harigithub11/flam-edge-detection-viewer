@@ -1,82 +1,128 @@
 import { FrameViewer } from './FrameViewer.js';
+import { WebSocketClient } from './WebSocketClient.js';
 import { FrameData } from './types.js';
 
 /**
  * Main application entry point
  */
 class App {
-    private rawViewer: FrameViewer;
-    private edgesViewer: FrameViewer;
-    private grayscaleViewer: FrameViewer;
+    private viewer: FrameViewer;
+    private wsClient: WebSocketClient;
 
     constructor() {
         console.log('🚀 Flam Edge Detection Viewer - Starting...');
 
-        // Initialize three viewers
-        this.rawViewer = new FrameViewer({
-            canvasId: 'rawCanvas',
+        // Initialize viewer
+        this.viewer = new FrameViewer({
+            canvasId: 'frameCanvas',
             showStats: true,
             scalingMode: 'fit'
         });
 
-        this.edgesViewer = new FrameViewer({
-            canvasId: 'edgesCanvas',
-            showStats: true,
-            scalingMode: 'fit'
-        });
+        // Initialize WebSocket client
+        this.wsClient = new WebSocketClient();
 
-        this.grayscaleViewer = new FrameViewer({
-            canvasId: 'grayscaleCanvas',
-            showStats: true,
-            scalingMode: 'fit'
-        });
+        // Setup WebSocket callbacks
+        this.setupWebSocketCallbacks();
 
-        // Load sample frames
-        this.loadSampleFrames();
+        // Setup connection UI
+        this.setupConnectionUI();
+
+        // Try to connect if device IP is provided
+        this.tryAutoConnect();
 
         console.log('✅ Application initialized');
     }
 
     /**
-     * Load and display sample frames
+     * Setup WebSocket callbacks
      */
-    private loadSampleFrames(): void {
-        // Sample metadata
-        const metadata = {
-            width: 1280,
-            height: 720,
-            fps: 15.3,
-            processingTimeMs: 45.2,
-            timestamp: Date.now()
-        };
+    private setupWebSocketCallbacks(): void {
+        // Handle incoming frames
+        this.wsClient.onFrame((frameData: FrameData) => {
+            // Display frame
+            this.viewer.displayFrame(frameData);
 
-        // Raw frame
-        const rawFrame: FrameData = {
-            imageData: './sample-frame-raw.png',
-            metadata: { ...metadata, mode: 'raw' as const }
-        };
+            // Update stats
+            this.viewer.updateStats(frameData.metadata);
 
-        // Edges frame
-        const edgesFrame: FrameData = {
-            imageData: './sample-frame-edges.png',
-            metadata: { ...metadata, mode: 'edges' as const }
-        };
+            // Update mode display
+            this.updateModeDisplay(frameData.metadata.mode || 'unknown');
+        });
 
-        // Grayscale frame
-        const grayscaleFrame: FrameData = {
-            imageData: './sample-frame-grayscale.png',
-            metadata: { ...metadata, mode: 'grayscale' as const }
-        };
+        // Handle status updates
+        this.wsClient.onStatus((status: string) => {
+            const statusElement = document.getElementById('connectionStatus');
+            if (statusElement) {
+                statusElement.textContent = status;
 
-        // Display frames
-        this.rawViewer.displayFrame(rawFrame);
-        this.edgesViewer.displayFrame(edgesFrame);
-        this.grayscaleViewer.displayFrame(grayscaleFrame);
+                // Update color based on status
+                if (status === 'Connected') {
+                    statusElement.style.color = '#00ff88';
+                } else if (status.includes('Reconnecting')) {
+                    statusElement.style.color = '#ffaa00';
+                } else {
+                    statusElement.style.color = '#ff4444';
+                }
+            }
+        });
+    }
 
-        // Update stats (using edges frame metadata)
-        this.rawViewer.updateStats(edgesFrame.metadata);
+    /**
+     * Setup connection UI
+     */
+    private setupConnectionUI(): void {
+        const connectButton = document.getElementById('connectButton');
+        const ipInput = document.getElementById('deviceIP') as HTMLInputElement;
 
-        console.log('Sample frames loaded');
+        if (connectButton && ipInput) {
+            connectButton.addEventListener('click', () => {
+                const ip = ipInput.value.trim();
+                if (ip) {
+                    localStorage.setItem('deviceIP', ip);
+                    this.wsClient.connect(ip);
+                }
+            });
+        }
+    }
+
+    /**
+     * Try to auto-connect using saved IP
+     */
+    private tryAutoConnect(): void {
+        const savedIP = localStorage.getItem('deviceIP');
+        if (savedIP) {
+            const ipInput = document.getElementById('deviceIP') as HTMLInputElement;
+            if (ipInput) {
+                ipInput.value = savedIP;
+            }
+            console.log(`🔄 Auto-connecting to ${savedIP}...`);
+            this.wsClient.connect(savedIP);
+        }
+    }
+
+    /**
+     * Update mode display
+     */
+    private updateModeDisplay(mode: string): void {
+        const modeElement = document.getElementById('modeDisplay');
+        if (modeElement) {
+            let modeText = '';
+            switch (mode) {
+                case 'raw':
+                    modeText = 'Raw Feed';
+                    break;
+                case 'edges':
+                    modeText = 'Canny Edge Detection';
+                    break;
+                case 'grayscale':
+                    modeText = 'Grayscale';
+                    break;
+                default:
+                    modeText = mode;
+            }
+            modeElement.textContent = modeText;
+        }
     }
 }
 

@@ -12,31 +12,33 @@
         <header class="header">
             <h1>🎨 Flam Edge Detection Viewer</h1>
             <p class="subtitle">Real-time Frame Processing & Analysis</p>
+
+            <!-- Connection Controls -->
+            <div class="connection-controls">
+                <input
+                    type="text"
+                    id="deviceIP"
+                    placeholder="Enter Android device IP (e.g., 192.168.1.100)"
+                    class="ip-input"
+                />
+                <button id="connectButton" class="connect-button">Connect</button>
+                <span class="connection-status">
+                    Status: <span id="connectionStatus">Disconnected</span>
+                </span>
+            </div>
         </header>
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Frame Viewer Section - Raw -->
+            <!-- Frame Viewer Section -->
             <section class="viewer-section">
-                <h2>Raw Camera Feed</h2>
-                <div class="canvas-container">
-                    <canvas id="rawCanvas"></canvas>
+                <h2>Processed Frame</h2>
+                <div class="mode-indicator">
+                    <span class="mode-label">Mode:</span>
+                    <span class="mode-value" id="modeDisplay">--</span>
                 </div>
-            </section>
-
-            <!-- Frame Viewer Section - Edges -->
-            <section class="viewer-section">
-                <h2>Edge Detection</h2>
                 <div class="canvas-container">
-                    <canvas id="edgesCanvas"></canvas>
-                </div>
-            </section>
-
-            <!-- Frame Viewer Section - Grayscale -->
-            <section class="viewer-section">
-                <h2>Grayscale</h2>
-                <div class="canvas-container">
-                    <canvas id="grayscaleCanvas"></canvas>
+                    <canvas id="frameCanvas"></canvas>
                 </div>
             </section>
 
