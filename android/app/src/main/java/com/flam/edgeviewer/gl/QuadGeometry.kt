@@ -14,12 +14,13 @@ class QuadGeometry {
 
         // Vertex data: Position (x, y) + TexCoord (u, v)
         // Fullscreen quad in Normalized Device Coordinates (-1 to 1)
+        // Texture coords rotated 90° counterclockwise - camera sensor orientation fix
         private val VERTICES = floatArrayOf(
             // Position (x, y)   Texture (u, v)
-            -1f,  1f,            0f, 0f,  // Top-left
-            -1f, -1f,            0f, 1f,  // Bottom-left
-             1f, -1f,            1f, 1f,  // Bottom-right
-             1f,  1f,            1f, 0f   // Top-right
+            -1f,  1f,            0f, 1f,  // Top-left
+            -1f, -1f,            1f, 1f,  // Bottom-left
+             1f, -1f,            1f, 0f,  // Bottom-right
+             1f,  1f,            0f, 0f   // Top-right
         )
 
         // Indices for two triangles

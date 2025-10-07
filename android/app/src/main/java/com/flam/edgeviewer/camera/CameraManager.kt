@@ -183,14 +183,22 @@ class CameraManager(
     }
 
     private val onImageAvailableListener = ImageReader.OnImageAvailableListener { reader ->
-        val image = reader.acquireLatestImage() ?: return@OnImageAvailableListener
+        Log.d(TAG, "onImageAvailableListener called")
+        val image = reader.acquireLatestImage()
+        if (image == null) {
+            Log.w(TAG, "acquireLatestImage returned null")
+            return@OnImageAvailableListener
+        }
 
         try {
+            Log.d(TAG, "Processing image: ${image.width}x${image.height}")
             // Convert YUV to byte array
             val byteArray = imageToByteArray(image)
 
+            Log.d(TAG, "Invoking onFrameAvailable callback, callback is null: ${onFrameAvailable == null}")
             // Callback with frame data
             onFrameAvailable?.invoke(byteArray, image.width, image.height)
+            Log.d(TAG, "onFrameAvailable callback completed")
 
         } catch (e: Exception) {
             Log.e(TAG, "Error processing frame", e)

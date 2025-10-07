@@ -65,12 +65,15 @@ class GLRenderer(private val context: Context) : GLSurfaceView.Renderer {
     }
 
     override fun onDrawFrame(gl: GL10?) {
+        Log.d(TAG, "onDrawFrame called")
+
         // Clear screen
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
 
         // Check if we have a frame to render
         synchronized(frameLock) {
             if (frameUpdated && currentFrame != null) {
+                Log.d(TAG, "Updating texture with frame: ${frameWidth}x${frameHeight}")
                 // Update texture with new frame data
                 textureHelper?.updateTexture(
                     textureId,
@@ -86,7 +89,16 @@ class GLRenderer(private val context: Context) : GLSurfaceView.Renderer {
         if (textureId != 0) {
             shaderProgram?.use()
             textureHelper?.bindTexture(textureId)
+
+            // Set texture uniform to texture unit 0
+            shaderProgram?.let {
+                GLES20.glUniform1i(it.textureHandle, 0)
+            }
+
             quadGeometry?.draw(shaderProgram)
+            Log.d(TAG, "Frame rendered")
+        } else {
+            Log.w(TAG, "No texture to render")
         }
 
         checkGLError("onDrawFrame")
@@ -97,11 +109,13 @@ class GLRenderer(private val context: Context) : GLSurfaceView.Renderer {
      * Thread-safe
      */
     fun updateFrame(frameData: ByteArray, width: Int, height: Int) {
+        Log.d(TAG, "updateFrame called: ${width}x${height}, dataSize=${frameData.size}")
         synchronized(frameLock) {
             currentFrame = frameData
             frameWidth = width
             frameHeight = height
             frameUpdated = true
+            Log.d(TAG, "Frame update completed, frameUpdated=$frameUpdated")
         }
     }
 

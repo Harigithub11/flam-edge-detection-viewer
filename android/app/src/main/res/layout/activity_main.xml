@@ -17,14 +17,18 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="top|end"
-        android:layout_margin="16dp"
+        android:layout_marginTop="48dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginBottom="16dp"
         android:text="FPS: --"
         android:textColor="#FFFFFF"
         android:textSize="18sp"
         android:textStyle="bold"
         android:background="#80000000"
         android:padding="8dp"
-        android:elevation="8dp" />
+        android:elevation="16dp"
+        android:translationZ="16dp" />
 
     <!-- Processing Time Overlay -->
     <TextView
@@ -32,12 +36,16 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="top|start"
-        android:layout_margin="16dp"
+        android:layout_marginTop="48dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
         android:text="Processing: -- ms"
         android:textColor="#FFFFFF"
         android:textSize="14sp"
         android:background="#80000000"
         android:padding="8dp"
-        android:elevation="8dp" />
+        android:elevation="16dp"
+        android:translationZ="16dp" />
 
 </FrameLayout>

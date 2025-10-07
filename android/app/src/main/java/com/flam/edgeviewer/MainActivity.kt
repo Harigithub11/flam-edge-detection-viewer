@@ -40,6 +40,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Hide action bar
+        supportActionBar?.hide()
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -92,6 +95,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun processFrame(frame: ByteArray, width: Int, height: Int) {
+        Log.d(TAG, "processFrame called: width=$width, height=$height, frameSize=${frame.size}")
         val startTime = System.currentTimeMillis()
 
         // Process frame via JNI
@@ -104,10 +108,13 @@ class MainActivity : AppCompatActivity() {
 
         // Update OpenGL texture with processed frame
         if (processedFrame != null) {
+            Log.d(TAG, "Processed frame received: size=${processedFrame.size}")
             glRenderer.updateFrame(processedFrame, width, height)
 
+            Log.d(TAG, "Calling glSurfaceView.requestRender()")
             // Request render
             glSurfaceView.requestRender()
+            Log.d(TAG, "glSurfaceView.requestRender() completed")
 
             // Update FPS counter
             updateFps()

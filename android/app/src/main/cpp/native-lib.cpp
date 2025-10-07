@@ -88,9 +88,17 @@ Java_com_flam_edgeviewer_processing_FrameProcessor_processFrameNative(
 
     jsize inputSize = env->GetArrayLength(inputFrame);
 
-    // Create OpenCV Mat from input (YUV or RGBA)
-    // Assuming RGBA for simplicity (convert YUV in production)
-    cv::Mat inputMat(height, width, CV_8UC4, inputBytes);
+    // YUV_420_888 format from camera
+    // Y plane is full resolution (width * height)
+    // UV planes are half resolution
+    // Total size = width * height * 1.5
+
+    // Extract Y plane (grayscale) from YUV data
+    // Y plane is the first width*height bytes
+    cv::Mat yPlane(height, width, CV_8UC1, inputBytes);
+
+    // Create a copy since we'll release the input array
+    cv::Mat inputMat = yPlane.clone();
 
     // Process frame
     cv::Mat outputMat;
