@@ -20,8 +20,8 @@ class CameraManager(
 ) {
     companion object {
         private const val TAG = "CameraManager"
-        private const val TARGET_WIDTH = 1920
-        private const val TARGET_HEIGHT = 1080
+        private const val TARGET_WIDTH = 1280
+        private const val TARGET_HEIGHT = 720
     }
 
     private var cameraDevice: CameraDevice? = null
@@ -31,6 +31,9 @@ class CameraManager(
     private var backgroundHandler: Handler? = null
 
     private var sensorOrientation: Int = 0
+
+    // Cache the UV format type (0=unknown, 1=NV21, 2=YV12, 3=I420)
+    private var uvFormatType: Int = 0
 
     // Callback for frame availability (data, width, height, rotationDegrees)
     var onFrameAvailable: ((ByteArray, Int, Int, Int) -> Unit)? = null
@@ -74,7 +77,22 @@ class CameraManager(
                 if (facing == CameraCharacteristics.LENS_FACING_BACK) {
                     // Get sensor orientation
                     sensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 0
+
+                    // Check color filter arrangement (is it a color or mono sensor?)
+                    val colorFilter = characteristics.get(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT)
+                    val colorFilterName = when (colorFilter) {
+                        CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_RGGB -> "RGGB (Color)"
+                        CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_GRBG -> "GRBG (Color)"
+                        CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_GBRG -> "GBRG (Color)"
+                        CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_BGGR -> "BGGR (Color)"
+                        CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_RGB -> "RGB (Color)"
+                        5 -> "MONO (Monochrome)"
+                        6 -> "NIR (Near Infrared)"
+                        else -> "Unknown ($colorFilter)"
+                    }
+
                     Log.d(TAG, "Camera sensor orientation: $sensorOrientation")
+                    Log.d(TAG, "Camera color filter: $colorFilterName")
                     return cameraId
                 }
             }
@@ -109,6 +127,7 @@ class CameraManager(
             val device = cameraDevice ?: return
 
             // Create ImageReader for frame processing
+            // Use YUV_420_888 for continuous capture (JPEG is too slow for real-time)
             imageReader = ImageReader.newInstance(
                 TARGET_WIDTH,
                 TARGET_HEIGHT,
@@ -143,6 +162,30 @@ class CameraManager(
                 // Add preview target if available
                 previewSurface?.let { addTarget(it) }
                 addTarget(imageReader!!.surface)
+
+                // Force maximum JPEG quality for better color
+                set(
+                    CaptureRequest.JPEG_QUALITY,
+                    100.toByte()
+                )
+
+                // Force color mode (not monochrome)
+                set(
+                    CaptureRequest.CONTROL_EFFECT_MODE,
+                    CaptureRequest.CONTROL_EFFECT_MODE_OFF
+                )
+
+                // Ensure color AWB (auto white balance) is enabled
+                set(
+                    CaptureRequest.CONTROL_AWB_MODE,
+                    CaptureRequest.CONTROL_AWB_MODE_AUTO
+                )
+
+                // Force color rendering
+                set(
+                    CaptureRequest.COLOR_CORRECTION_MODE,
+                    CaptureRequest.COLOR_CORRECTION_MODE_HIGH_QUALITY
+                )
 
                 // Auto focus
                 set(
@@ -232,22 +275,142 @@ class CameraManager(
     }
 
     private fun imageToByteArray(image: android.media.Image): ByteArray {
-        // YUV_420_888 to byte array conversion
-        val yPlane = image.planes[0]
-        val uPlane = image.planes[1]
-        val vPlane = image.planes[2]
+        // YUV_420_888 to NV21 conversion
+        val planes = image.planes
+        val yPlane = planes[0]
+        val uPlane = planes[1]
+        val vPlane = planes[2]
 
-        val ySize = yPlane.buffer.remaining()
-        val uSize = uPlane.buffer.remaining()
-        val vSize = vPlane.buffer.remaining()
+        val yBuffer = yPlane.buffer
+        val uBuffer = uPlane.buffer
+        val vBuffer = vPlane.buffer
 
-        val data = ByteArray(ySize + uSize + vSize)
+        val ySize = yBuffer.remaining()
+        val uSize = uBuffer.remaining()
+        val vSize = vBuffer.remaining()
 
-        yPlane.buffer.get(data, 0, ySize)
-        vPlane.buffer.get(data, ySize, vSize)
-        uPlane.buffer.get(data, ySize + vSize, uSize)
+        val width = image.width
+        val height = image.height
 
-        return data
+        // Handle UV planes based on pixelStride
+        val uvPixelStride = vPlane.pixelStride
+        val uvRowStride = vPlane.rowStride
+        val yRowStride = yPlane.rowStride
+
+        Log.d(TAG, "Image: ${width}x${height}")
+        Log.d(TAG, "Planes - Y: size=$ySize, rowStride=$yRowStride")
+        Log.d(TAG, "Planes - U: size=$uSize, V: size=$vSize")
+        Log.d(TAG, "UV: pixelStride=$uvPixelStride, rowStride=$uvRowStride")
+
+        // NV21 format: Y plane + interleaved VU plane
+        val nv21Size = width * height * 3 / 2
+        val nv21 = ByteArray(nv21Size)
+
+        // Copy Y plane - handle rowStride padding
+        yBuffer.rewind()
+        if (yRowStride == width) {
+            // No padding, direct copy
+            yBuffer.get(nv21, 0, ySize)
+        } else {
+            // Has padding, copy row by row
+            for (row in 0 until height) {
+                yBuffer.position(row * yRowStride)
+                yBuffer.get(nv21, row * width, width)
+            }
+        }
+
+        if (uvPixelStride == 1) {
+            // OPTIMIZED: Planar format with efficient bulk copy
+            // Android Camera2 with pixelStride=1 gives separate U and V planes
+            val uvWidth = width / 2
+            val uvHeight = height / 2
+
+            Log.d(TAG, "Planar format (pixelStride=1): optimized bulk copy")
+            Log.d(TAG, "UV dimensions: ${uvWidth}x${uvHeight}, rowStride=$uvRowStride")
+
+            try {
+                var pos = ySize
+
+                // CRITICAL: Camera2 gives planes in order Y, U, V (not Y, V, U)
+                // So we need to check which plane is which
+                // NV21 needs: Y + VUVUVU... (V first)
+                // I420 needs: Y + UUU... + VVV... (U first)
+
+                // Let's try YV12 format: Y + V + U (planar)
+                // This is what many Android cameras actually output with pixelStride=1
+
+                // Copy V plane first (bulk copy per row for performance)
+                vBuffer.rewind()
+                if (uvRowStride == uvWidth) {
+                    // No padding, direct copy
+                    vBuffer.get(nv21, pos, uvWidth * uvHeight)
+                    pos += uvWidth * uvHeight
+                } else {
+                    // Has padding, copy row by row
+                    for (row in 0 until uvHeight) {
+                        vBuffer.position(row * uvRowStride)
+                        vBuffer.get(nv21, pos, uvWidth)
+                        pos += uvWidth
+                    }
+                }
+
+                // Copy U plane (bulk copy per row)
+                uBuffer.rewind()
+                if (uvRowStride == uvWidth) {
+                    // No padding, direct copy
+                    uBuffer.get(nv21, pos, uvWidth * uvHeight)
+                    pos += uvWidth * uvHeight
+                } else {
+                    // Has padding, copy row by row
+                    for (row in 0 until uvHeight) {
+                        uBuffer.position(row * uvRowStride)
+                        uBuffer.get(nv21, pos, uvWidth)
+                        pos += uvWidth
+                    }
+                }
+
+                Log.d(TAG, "YV12 format created (Y+V+U planar), total: ${pos} bytes")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error creating YV12 format", e)
+            }
+        } else {
+            // Interleaved format (most common, pixelStride=2)
+            // U and V buffers point to the same memory but offset by 1 byte
+            // Check if buffers overlap (common case)
+            val vPos = vBuffer.position()
+            val uPos = uBuffer.position()
+
+            Log.d(TAG, "Buffer positions - V: $vPos, U: $uPos")
+
+            if (Math.abs(vPos - uPos) == 1) {
+                // Buffers are interleaved, can copy directly from V buffer
+                vBuffer.position(0)
+                val uvSize = width * height / 2
+                vBuffer.get(nv21, ySize, Math.min(uvSize, vBuffer.remaining()))
+                Log.d(TAG, "Direct UV copy (interleaved)")
+            } else {
+                // Manual interleaving needed
+                vBuffer.rewind()
+                uBuffer.rewind()
+
+                var pos = ySize
+                val uvWidth = width / 2
+                val uvHeight = height / 2
+
+                for (row in 0 until uvHeight) {
+                    for (col in 0 until uvWidth) {
+                        val vOffset = row * uvRowStride + col * uvPixelStride
+                        val uOffset = row * uvRowStride + col * uvPixelStride
+                        nv21[pos++] = vBuffer.get(vOffset)     // V (Cr)
+                        nv21[pos++] = uBuffer.get(uOffset)     // U (Cb)
+                    }
+                }
+                Log.d(TAG, "Manual UV interleaving")
+            }
+        }
+
+        Log.d(TAG, "NV21 conversion complete: ${nv21.size} bytes")
+        return nv21
     }
 
     private fun startBackgroundThread() {

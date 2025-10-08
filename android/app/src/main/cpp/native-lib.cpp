@@ -62,6 +62,23 @@ Java_com_flam_edgeviewer_processing_FrameProcessor_releaseProcessor(
     ImageProcessor::release();
 }
 
+// Helper function: Convert YUV to RGB manually (like OpenCV-NDK reference)
+static inline void YUV2RGB_Manual(uint8_t Y, uint8_t U, uint8_t V, uint8_t& R, uint8_t& G, uint8_t& B) {
+    int y = Y - 16;
+    int u = U - 128;
+    int v = V - 128;
+    if (y < 0) y = 0;
+
+    // Integer math for performance (no floating point)
+    int r = (1192 * y + 1634 * v) >> 10;
+    int g = (1192 * y - 833 * v - 400 * u) >> 10;
+    int b = (1192 * y + 2066 * u) >> 10;
+
+    R = std::min(255, std::max(0, r));
+    G = std::min(255, std::max(0, g));
+    B = std::min(255, std::max(0, b));
+}
+
 extern "C" JNIEXPORT jbyteArray JNICALL
 Java_com_flam_edgeviewer_processing_FrameProcessor_processFrameNative(
         JNIEnv* env,
@@ -78,14 +95,16 @@ Java_com_flam_edgeviewer_processing_FrameProcessor_processFrameNative(
     // BEST PRACTICE: Get array size BEFORE critical section (no JNI calls allowed inside)
     jsize inputSize = env->GetArrayLength(inputFrame);
 
+    // Log input parameters
+    LOGD("Processing frame: size=%d, width=%d, height=%d, mode=%d", inputSize, width, height, mode);
+
     // Validate input size
-    if (inputSize < width * height) {
-        LOGE("Invalid input size: %d, expected at least: %d", inputSize, width * height);
+    if (inputSize < 100) {
+        LOGE("Invalid input size: %d (too small)", inputSize);
         return nullptr;
     }
 
-    // CRITICAL SECTION START: Get input array using GetPrimitiveArrayCritical
-    // Rules: NO JNI calls, NO GC, minimal operations only
+    // CRITICAL SECTION START
     jboolean isCopy = JNI_FALSE;
     jbyte* inputBytes = reinterpret_cast<jbyte*>(
         env->GetPrimitiveArrayCritical(inputFrame, &isCopy)
@@ -96,42 +115,90 @@ Java_com_flam_edgeviewer_processing_FrameProcessor_processFrameNative(
         return nullptr;
     }
 
-    // CRITICAL SECTION: Only wrap data, NO processing
-    // For RAW mode, we need full YUV data for color conversion
-    // For other modes, Y plane (grayscale) is sufficient
     cv::Mat inputMat;
 
-    if (mode == 0) {  // MODE_RAW - need color
-        // YUV_420_888 format: Y plane (width*height) + VU planes (width*height/2)
-        int ySize = width * height;
-        int uvSize = ySize / 2;
+    if (mode == 0) {  // MODE_RAW - YUV to RGB conversion
+        // BALANCED APPROACH: Try OpenCV conversion first, fall back to manual if needed
+        cv::Mat yuvMat(height + height / 2, width, CV_8UC1, inputBytes);
+        cv::Mat yuvCopy = yuvMat.clone();
 
-        // Create YUV image and clone the data
-        cv::Mat yuvImage(height + height / 2, width, CV_8UC1, inputBytes);
-        cv::Mat yuvCopy = yuvImage.clone();
-
-        // CRITICAL SECTION END: Release immediately after cloning
+        // CRITICAL SECTION END: Release immediately
         env->ReleasePrimitiveArrayCritical(inputFrame, inputBytes, JNI_ABORT);
 
-        // OUTSIDE CRITICAL SECTION: Convert YUV to RGB (not BGR to fix color swap)
-        cv::Mat bgrMat;
-        cv::cvtColor(yuvCopy, bgrMat, cv::COLOR_YUV2BGR_NV21);
-        cv::cvtColor(bgrMat, inputMat, cv::COLOR_BGR2RGB);
+        LOGD("MODE_RAW: Converting YUV to RGB...");
+
+        cv::Mat rgbMat(height, width, CV_8UC3);
+
+        // Try YV12 first (Y + V + U)
+        try {
+            cv::cvtColor(yuvCopy, rgbMat, cv::COLOR_YUV2RGB_YV12);
+            LOGD("YV12 conversion successful");
+        } catch (...) {
+            // Try I420 (Y + U + V)
+            try {
+                cv::cvtColor(yuvCopy, rgbMat, cv::COLOR_YUV2RGB_I420);
+                LOGD("I420 conversion successful");
+            } catch (...) {
+                // Try NV21 (Y + interleaved VU)
+                try {
+                    cv::cvtColor(yuvCopy, rgbMat, cv::COLOR_YUV2RGB_NV21);
+                    LOGD("NV21 conversion successful");
+                } catch (...) {
+                    LOGE("All OpenCV conversions failed, using manual conversion");
+                    // Manual conversion as last resort
+                    uint8_t* yPtr = yuvCopy.data;
+                    uint8_t* uPtr = yuvCopy.data + (width * height);
+                    uint8_t* vPtr = uPtr + (width * height / 4);
+
+                    for (int y = 0; y < height; y++) {
+                        for (int x = 0; x < width; x++) {
+                            int yIdx = y * width + x;
+                            int uvIdx = (y / 2) * (width / 2) + (x / 2);
+
+                            uint8_t Y = yPtr[yIdx];
+                            uint8_t U = uPtr[uvIdx];
+                            uint8_t V = vPtr[uvIdx];
+
+                            uint8_t R, G, B;
+                            YUV2RGB_Manual(Y, U, V, R, G, B);
+
+                            rgbMat.at<cv::Vec3b>(y, x) = cv::Vec3b(R, G, B);
+                        }
+                    }
+                    LOGD("Manual conversion complete");
+                }
+            }
+        }
+
+        // Fix vertical flip
+        cv::flip(rgbMat, inputMat, 0);
+
+        LOGD("MODE_RAW: RGB ready - channels=%d, size=%dx%d",
+             inputMat.channels(), inputMat.cols, inputMat.rows);
     } else {
-        // For EDGES and GRAYSCALE modes, Y plane only (grayscale)
+        // For EDGES and GRAYSCALE: Use Y plane only
         cv::Mat yPlane(height, width, CV_8UC1, inputBytes);
-        inputMat = yPlane.clone();
+        cv::Mat yCopy = yPlane.clone();
 
-        // CRITICAL SECTION END: Release immediately after cloning
+        // CRITICAL SECTION END: Release immediately
         env->ReleasePrimitiveArrayCritical(inputFrame, inputBytes, JNI_ABORT);
+
+        // Fix vertical flip
+        cv::flip(yCopy, inputMat, 0);
+
+        LOGD("MODE_GRAY/EDGES: Grayscale ready, channels=%d", inputMat.channels());
     }
 
     // OUTSIDE CRITICAL SECTION: Now safe to do processing with JNI calls possible
     cv::Mat outputMat;
 
     try {
+        LOGD("Processing frame with mode=%d", mode);
+
         // Process frame
         ImageProcessor::processFrame(inputMat, outputMat, mode);
+
+        LOGD("Frame processed successfully, output channels=%d", outputMat.channels());
 
         // Apply rotation if needed
         if (rotationDegrees != 0) {
@@ -140,10 +207,13 @@ Java_com_flam_edgeviewer_processing_FrameProcessor_processFrameNative(
             outputMat = rotatedMat;
         }
     } catch (const cv::Exception& e) {
-        LOGE("OpenCV error: %s", e.what());
+        LOGE("OpenCV error in mode %d: %s", mode, e.what());
         return nullptr;
     } catch (const std::exception& e) {
-        LOGE("Error: %s", e.what());
+        LOGE("Error in mode %d: %s", mode, e.what());
+        return nullptr;
+    } catch (...) {
+        LOGE("Unknown error in mode %d", mode);
         return nullptr;
     }
 

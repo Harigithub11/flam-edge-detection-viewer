@@ -348,12 +348,25 @@ class MainActivity : AppCompatActivity() {
         processingThread = thread(name = "FrameProcessor") {
             Log.d(TAG, "Processing thread started")
 
+            // Frame rate throttling - target 30fps (33ms per frame)
+            val targetFrameTimeMs = 33L
+            var lastFrameTime = System.currentTimeMillis()
+
             while (isProcessingActive) {
                 // Skip frame if still processing previous one
                 if (isProcessingFrame) {
                     Thread.sleep(5)
                     continue
                 }
+
+                // Frame rate throttling
+                val currentTime = System.currentTimeMillis()
+                val timeSinceLastFrame = currentTime - lastFrameTime
+                if (timeSinceLastFrame < targetFrameTimeMs) {
+                    Thread.sleep(targetFrameTimeMs - timeSinceLastFrame)
+                    continue
+                }
+                lastFrameTime = currentTime
 
                 // Get latest frame (discard older frames)
                 val frame = frameBuffer.getLatestFrame()

@@ -10,6 +10,16 @@ class TextureHelper {
         private const val TAG = "TextureHelper"
     }
 
+    // Reusable ByteBuffer to avoid allocations every frame
+    private var byteBuffer: ByteBuffer? = null
+    private var bufferCapacity: Int = 0
+
+    // Track if texture has been initialized with glTexImage2D
+    private var textureInitialized = false
+    private var lastWidth = 0
+    private var lastHeight = 0
+    private var lastFormat = 0
+
     fun createTexture(): Int {
         val textureIds = IntArray(1)
         GLES20.glGenTextures(1, textureIds, 0)
@@ -67,8 +77,15 @@ class TextureHelper {
         // Bind texture
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
 
-        // Create ByteBuffer from data
-        val buffer = ByteBuffer.allocateDirect(data.size)
+        // Reuse or create ByteBuffer
+        if (byteBuffer == null || bufferCapacity < data.size) {
+            byteBuffer = ByteBuffer.allocateDirect(data.size)
+            bufferCapacity = data.size
+            Log.d(TAG, "Allocated new ByteBuffer: ${data.size} bytes")
+        }
+
+        val buffer = byteBuffer!!
+        buffer.clear()
         buffer.put(data)
         buffer.position(0)
 
@@ -80,18 +97,38 @@ class TextureHelper {
             else -> GLES20.GL_LUMINANCE
         }
 
-        // Upload texture data
-        GLES20.glTexImage2D(
-            GLES20.GL_TEXTURE_2D,
-            0,                              // Mipmap level
-            format,                         // Internal format
-            width,
-            height,
-            0,                              // Border (must be 0)
-            format,                         // Format
-            GLES20.GL_UNSIGNED_BYTE,        // Type
-            buffer
-        )
+        // First time or dimensions/format changed: use glTexImage2D
+        if (!textureInitialized || width != lastWidth || height != lastHeight || format != lastFormat) {
+            GLES20.glTexImage2D(
+                GLES20.GL_TEXTURE_2D,
+                0,
+                format,
+                width,
+                height,
+                0,
+                format,
+                GLES20.GL_UNSIGNED_BYTE,
+                buffer
+            )
+            textureInitialized = true
+            lastWidth = width
+            lastHeight = height
+            lastFormat = format
+            Log.d(TAG, "Texture initialized with glTexImage2D: ${width}x${height}, format=$format")
+        } else {
+            // Subsequent updates: use faster glTexSubImage2D
+            GLES20.glTexSubImage2D(
+                GLES20.GL_TEXTURE_2D,
+                0,                              // Mipmap level
+                0,                              // X offset
+                0,                              // Y offset
+                width,
+                height,
+                format,                         // Format
+                GLES20.GL_UNSIGNED_BYTE,        // Type
+                buffer
+            )
+        }
 
         // Unbind
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
@@ -106,7 +143,13 @@ class TextureHelper {
     }
 
     fun release() {
-        // Texture deletion handled by GLRenderer
+        // Clear buffer reference for GC
+        byteBuffer = null
+        bufferCapacity = 0
+        textureInitialized = false
+        lastWidth = 0
+        lastHeight = 0
+        lastFormat = 0
         Log.d(TAG, "TextureHelper released")
     }
 }

@@ -40,8 +40,8 @@ class FrameBuffer {
         }
     }
 
-    // Double buffering with queue (capacity 2)
-    private val frameQueue = ArrayBlockingQueue<Frame>(2)
+    // Triple buffering with queue (capacity 3)
+    private val frameQueue = ArrayBlockingQueue<Frame>(3)
 
     /**
      * Add frame to queue (non-blocking)
