@@ -14,6 +14,24 @@ import android.view.Surface
 import android.view.TextureView
 import androidx.core.content.ContextCompat
 
+/**
+ * Manages Camera2 API operations for real-time video capture and processing.
+ *
+ * This class handles:
+ * - Camera device initialization and configuration
+ * - YUV_420_888 to NV21 format conversion
+ * - Background thread management for camera operations
+ * - Frame capture callbacks with rotation metadata
+ * - Automatic UV format detection (NV21/YV12/I420)
+ *
+ * Target Resolution: 1280x720 (optimized for performance)
+ * Output Format: NV21 (YUV420 planar format)
+ *
+ * @property context Application context for camera access
+ * @property textureView Optional TextureView for camera preview (can be null for headless mode)
+ * @property onFrameAvailable Callback invoked when a new frame is captured
+ *                             Parameters: (data: ByteArray, width: Int, height: Int, rotationDegrees: Int)
+ */
 class CameraManager(
     private val context: Context,
     private val textureView: TextureView?
@@ -31,9 +49,6 @@ class CameraManager(
     private var backgroundHandler: Handler? = null
 
     private var sensorOrientation: Int = 0
-
-    // Cache the UV format type (0=unknown, 1=NV21, 2=YV12, 3=I420)
-    private var uvFormatType: Int = 0
 
     // Callback for frame availability (data, width, height, rotationDegrees)
     var onFrameAvailable: ((ByteArray, Int, Int, Int) -> Unit)? = null
@@ -162,12 +177,6 @@ class CameraManager(
                 // Add preview target if available
                 previewSurface?.let { addTarget(it) }
                 addTarget(imageReader!!.surface)
-
-                // Force maximum JPEG quality for better color
-                set(
-                    CaptureRequest.JPEG_QUALITY,
-                    100.toByte()
-                )
 
                 // Force color mode (not monochrome)
                 set(
@@ -320,58 +329,36 @@ class CameraManager(
         }
 
         if (uvPixelStride == 1) {
-            // OPTIMIZED: Planar format with efficient bulk copy
+            // Planar format - must interleave V and U to create proper NV21
             // Android Camera2 with pixelStride=1 gives separate U and V planes
             val uvWidth = width / 2
             val uvHeight = height / 2
 
-            Log.d(TAG, "Planar format (pixelStride=1): optimized bulk copy")
+            Log.d(TAG, "Planar format (pixelStride=1): interleaving UV to NV21")
             Log.d(TAG, "UV dimensions: ${uvWidth}x${uvHeight}, rowStride=$uvRowStride")
 
             try {
+                val vRowStride = vPlane.rowStride
+                val uRowStride = uPlane.rowStride
+                val vRow = ByteArray(uvWidth)
+                val uRow = ByteArray(uvWidth)
                 var pos = ySize
 
-                // CRITICAL: Camera2 gives planes in order Y, U, V (not Y, V, U)
-                // So we need to check which plane is which
-                // NV21 needs: Y + VUVUVU... (V first)
-                // I420 needs: Y + UUU... + VVV... (U first)
+                for (row in 0 until uvHeight) {
+                    vBuffer.position(row * vRowStride)
+                    vBuffer.get(vRow, 0, uvWidth)
+                    uBuffer.position(row * uRowStride)
+                    uBuffer.get(uRow, 0, uvWidth)
 
-                // Let's try YV12 format: Y + V + U (planar)
-                // This is what many Android cameras actually output with pixelStride=1
-
-                // Copy V plane first (bulk copy per row for performance)
-                vBuffer.rewind()
-                if (uvRowStride == uvWidth) {
-                    // No padding, direct copy
-                    vBuffer.get(nv21, pos, uvWidth * uvHeight)
-                    pos += uvWidth * uvHeight
-                } else {
-                    // Has padding, copy row by row
-                    for (row in 0 until uvHeight) {
-                        vBuffer.position(row * uvRowStride)
-                        vBuffer.get(nv21, pos, uvWidth)
-                        pos += uvWidth
+                    for (col in 0 until uvWidth) {
+                        nv21[pos++] = vRow[col]    // V (Cr)
+                        nv21[pos++] = uRow[col]    // U (Cb)
                     }
                 }
 
-                // Copy U plane (bulk copy per row)
-                uBuffer.rewind()
-                if (uvRowStride == uvWidth) {
-                    // No padding, direct copy
-                    uBuffer.get(nv21, pos, uvWidth * uvHeight)
-                    pos += uvWidth * uvHeight
-                } else {
-                    // Has padding, copy row by row
-                    for (row in 0 until uvHeight) {
-                        uBuffer.position(row * uvRowStride)
-                        uBuffer.get(nv21, pos, uvWidth)
-                        pos += uvWidth
-                    }
-                }
-
-                Log.d(TAG, "YV12 format created (Y+V+U planar), total: ${pos} bytes")
+                Log.d(TAG, "Planar UV interleaved to NV21 (${pos} bytes)")
             } catch (e: Exception) {
-                Log.e(TAG, "Error creating YV12 format", e)
+                Log.e(TAG, "Error interleaving planar UV to NV21", e)
             }
         } else {
             // Interleaved format (most common, pixelStride=2)

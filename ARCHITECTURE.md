@@ -40,7 +40,7 @@ The Flam Edge Detection Viewer is a multi-threaded, cross-platform system for re
 
 The Android app uses **5 separate threads** for optimal performance:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                         UI THREAD                                │
 │  (Main Thread - android.os.HandlerThread)                        │
@@ -122,7 +122,7 @@ The Android app uses **5 separate threads** for optimal performance:
 **FrameBuffer.kt** (Producer-Consumer Pattern):
 ```kotlin
 class FrameBuffer {
-    private val frameQueue = ArrayBlockingQueue<Frame>(2)  // Capacity: 2
+    private val frameQueue = ArrayBlockingQueue<Frame>(3)  // Capacity: 3
 
     fun putFrame(...): Boolean {
         return frameQueue.offer(Frame(...))  // Non-blocking, drops if full
@@ -166,7 +166,7 @@ override fun onDrawFrame(gl: GL10?) {
 
 ### Complete Frame Pipeline
 
-```
+```text
 1. CAMERA CAPTURE (Camera Thread)
    ├─ Camera2 API: ImageReader.OnImageAvailableListener
    ├─ Format: YUV_420_888 (1920x1080)

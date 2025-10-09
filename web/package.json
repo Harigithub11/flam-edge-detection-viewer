@@ -7,6 +7,7 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
+    "dev": "npm run build && npx http-server public -p 3000",
     "clean": "rm -rf dist",
     "rebuild": "npm run clean && npm run build",
     "sync": "node sync-frames.js",

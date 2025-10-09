@@ -929,6 +929,24 @@ ls public/*.js
 # types.js
 ```
 
+### 6.4 Start Web Server
+
+```bash
+npx http-server public -p 3000
+```
+
+**Expected output:**
+```
+Starting up http-server, serving public
+
+Available on:
+  http://127.0.0.1:3000
+  http://192.168.1.x:3000
+Hit CTRL-C to stop the server
+```
+
+**Web viewer is now accessible at:** `http://localhost:3000`
+
 ---
 
 ## 7. Network Configuration

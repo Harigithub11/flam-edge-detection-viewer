@@ -57,7 +57,8 @@ adb shell am start -n com.flam.edgeviewer/.MainActivity
 ```bash
 cd web
 npm install
-npm run dev
+npm run build
+npx http-server public -p 3000
 ```
 
 Web server starts on `http://localhost:3000`

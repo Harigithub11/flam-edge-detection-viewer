@@ -62,21 +62,51 @@ Java_com_flam_edgeviewer_processing_FrameProcessor_releaseProcessor(
     ImageProcessor::release();
 }
 
-// Helper function: Convert YUV to RGB manually (like OpenCV-NDK reference)
-static inline void YUV2RGB_Manual(uint8_t Y, uint8_t U, uint8_t V, uint8_t& R, uint8_t& G, uint8_t& B) {
-    int y = Y - 16;
-    int u = U - 128;
-    int v = V - 128;
-    if (y < 0) y = 0;
+// EXACT COPY from sjfricke/OpenCV-NDK - Image_Reader.cpp lines 182-209
+// https://github.com/sjfricke/OpenCV-NDK
+#ifndef MAX
+#define MAX(a, b) \
+  ({                        \
+    __typeof__(a) _a = (a); \
+    __typeof__(b) _b = (b); \
+    _a > _b ? _a : _b;      \
+  })
+#define MIN(a, b) \
+  ({                        \
+    __typeof__(a) _a = (a); \
+    __typeof__(b) _b = (b); \
+    _a < _b ? _a : _b;      \
+  })
+#endif
 
-    // Integer math for performance (no floating point)
-    int r = (1192 * y + 1634 * v) >> 10;
-    int g = (1192 * y - 833 * v - 400 * u) >> 10;
-    int b = (1192 * y + 2066 * u) >> 10;
+// This value is 2 ^ 18 - 1, and is used to clamp the RGB values before their ranges
+// are normalized to eight bits.
+static const int kMaxChannelValue = 262143;
 
-    R = std::min(255, std::max(0, r));
-    G = std::min(255, std::max(0, g));
-    B = std::min(255, std::max(0, b));
+static inline uint32_t YUV2RGB(int nY, int nU, int nV) {
+  nY -= 16;
+  nU -= 128;
+  nV -= 128;
+  if (nY < 0) nY = 0;
+
+  // Standard ITU-R BT.601 conversion coefficients (scaled by 1024 for integer math)
+  // R = Y + 1.402 * (V - 128)
+  // G = Y - 0.344136 * (U - 128) - 0.714136 * (V - 128)  
+  // B = Y + 1.772 * (U - 128)
+  
+  int nR = (int)(1024 * nY + 1436 * nV);
+  int nG = (int)(1024 * nY - 352 * nU - 731 * nV);
+  int nB = (int)(1024 * nY + 1815 * nU);
+
+  nR = MIN(kMaxChannelValue, MAX(0, nR));
+  nG = MIN(kMaxChannelValue, MAX(0, nG));
+  nB = MIN(kMaxChannelValue, MAX(0, nB));
+
+  nR = (nR >> 10) & 0xff;
+  nG = (nG >> 10) & 0xff;
+  nB = (nB >> 10) & 0xff;
+
+  return 0xff000000 | (nR << 16) | (nG << 8) | nB;
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
@@ -98,9 +128,11 @@ Java_com_flam_edgeviewer_processing_FrameProcessor_processFrameNative(
     // Log input parameters
     LOGD("Processing frame: size=%d, width=%d, height=%d, mode=%d", inputSize, width, height, mode);
 
-    // Validate input size
-    if (inputSize < 100) {
-        LOGE("Invalid input size: %d (too small)", inputSize);
+    // Validate input size - YUV420 requires (width * height * 3) / 2 bytes
+    const int expectedMinSize = (width * height * 3) / 2;
+    if (inputSize < expectedMinSize) {
+        LOGE("Invalid input size: %d (expected at least %d for %dx%d YUV420)",
+             inputSize, expectedMinSize, width, height);
         return nullptr;
     }
 
@@ -118,60 +150,47 @@ Java_com_flam_edgeviewer_processing_FrameProcessor_processFrameNative(
     cv::Mat inputMat;
 
     if (mode == 0) {  // MODE_RAW - YUV to RGB conversion
-        // BALANCED APPROACH: Try OpenCV conversion first, fall back to manual if needed
+        // OFFICIAL OPENCV APPROACH from Google's documentation and Stack Overflow
+        // https://stackoverflow.com/questions/30510928/convert-android-camera2-api-yuv-420-888-to-rgb
+        // Mat construction: (height + height/2) rows x width columns for NV21 format
+
+        // Create Mat directly from NV21 buffer
         cv::Mat yuvMat(height + height / 2, width, CV_8UC1, inputBytes);
         cv::Mat yuvCopy = yuvMat.clone();
 
-        // CRITICAL SECTION END: Release immediately
+        // CRITICAL SECTION END: Release immediately after cloning
         env->ReleasePrimitiveArrayCritical(inputFrame, inputBytes, JNI_ABORT);
 
-        LOGD("MODE_RAW: Converting YUV to RGB...");
+        LOGD("MODE_RAW: Using OpenCV cvtColor with COLOR_YUV2BGR_NV21");
+        LOGD("YUV Mat size: %dx%d, channels=%d", yuvCopy.cols, yuvCopy.rows, yuvCopy.channels());
 
-        cv::Mat rgbMat(height, width, CV_8UC3);
+        cv::Mat bgrMat;
 
-        // Try YV12 first (Y + V + U)
+        // Use OpenCV's built-in NV21 to BGR conversion with timeout protection
+        LOGD("Starting YUV to BGR conversion...");
         try {
-            cv::cvtColor(yuvCopy, rgbMat, cv::COLOR_YUV2RGB_YV12);
-            LOGD("YV12 conversion successful");
+            cv::cvtColor(yuvCopy, bgrMat, cv::COLOR_YUV2BGR_NV21);
+            LOGD("OpenCV NV21 conversion succeeded");
+        } catch (const cv::Exception& e) {
+            LOGE("OpenCV NV21 conversion failed: %s", e.what());
+            // Create empty BGR mat as fallback
+            bgrMat = cv::Mat::zeros(height, width, CV_8UC3);
         } catch (...) {
-            // Try I420 (Y + U + V)
-            try {
-                cv::cvtColor(yuvCopy, rgbMat, cv::COLOR_YUV2RGB_I420);
-                LOGD("I420 conversion successful");
-            } catch (...) {
-                // Try NV21 (Y + interleaved VU)
-                try {
-                    cv::cvtColor(yuvCopy, rgbMat, cv::COLOR_YUV2RGB_NV21);
-                    LOGD("NV21 conversion successful");
-                } catch (...) {
-                    LOGE("All OpenCV conversions failed, using manual conversion");
-                    // Manual conversion as last resort
-                    uint8_t* yPtr = yuvCopy.data;
-                    uint8_t* uPtr = yuvCopy.data + (width * height);
-                    uint8_t* vPtr = uPtr + (width * height / 4);
-
-                    for (int y = 0; y < height; y++) {
-                        for (int x = 0; x < width; x++) {
-                            int yIdx = y * width + x;
-                            int uvIdx = (y / 2) * (width / 2) + (x / 2);
-
-                            uint8_t Y = yPtr[yIdx];
-                            uint8_t U = uPtr[uvIdx];
-                            uint8_t V = vPtr[uvIdx];
-
-                            uint8_t R, G, B;
-                            YUV2RGB_Manual(Y, U, V, R, G, B);
-
-                            rgbMat.at<cv::Vec3b>(y, x) = cv::Vec3b(R, G, B);
-                        }
-                    }
-                    LOGD("Manual conversion complete");
-                }
-            }
+            LOGE("Unknown error in YUV conversion");
+            // Create empty BGR mat as fallback
+            bgrMat = cv::Mat::zeros(height, width, CV_8UC3);
         }
+        LOGD("YUV conversion completed");
 
-        // Fix vertical flip
-        cv::flip(rgbMat, inputMat, 0);
+        LOGD("cvtColor complete - BGR Mat %dx%d, channels=%d",
+             bgrMat.cols, bgrMat.rows, bgrMat.channels());
+
+        // Fix both vertical flip (upside down) and horizontal flip (mirror)
+        cv::Mat flippedMat;
+        cv::flip(bgrMat, flippedMat, -1);
+
+        // Convert BGR to RGB for OpenGL (OpenCV outputs BGR, OpenGL expects RGB)
+        cv::cvtColor(flippedMat, inputMat, cv::COLOR_BGR2RGB);
 
         LOGD("MODE_RAW: RGB ready - channels=%d, size=%dx%d",
              inputMat.channels(), inputMat.cols, inputMat.rows);

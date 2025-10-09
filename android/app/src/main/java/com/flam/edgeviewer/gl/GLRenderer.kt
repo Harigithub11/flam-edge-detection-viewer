@@ -101,6 +101,10 @@ class GLRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 // Set rotation matrix based on current rotation
                 val rotationMatrix = createRotationMatrix(rotationDegrees)
                 GLES20.glUniformMatrix4fv(it.rotationMatrixHandle, 1, false, rotationMatrix, 0)
+                
+                // Set texture format (0 = grayscale, 1 = RGB)
+                val textureFormat = if (frameChannels == 3) 1 else 0
+                GLES20.glUniform1i(it.textureFormatHandle, textureFormat)
             }
 
             quadGeometry?.draw(shaderProgram)

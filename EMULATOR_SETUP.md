@@ -37,8 +37,6 @@ This guide explains how to use the Flam Edge Detection Viewer with an Android Em
    - **Front camera**: Select `Webcam0` (or your webcam name)
    - **Back camera**: Select `Webcam0` (or your webcam name)
 
-   ![AVD Camera Settings Example](docs/emulator-camera-config.png)
-
 5. **Click Finish**
 
 6. **Start the emulator**
@@ -128,7 +126,7 @@ adb forward --list
 ```bash
 cd android
 ./gradlew assembleDebug
-adb install app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.flam.edgeviewer/.MainActivity
 ```
 
@@ -136,7 +134,8 @@ adb shell am start -n com.flam.edgeviewer/.MainActivity
 ```bash
 cd web
 npm install
-npm run dev
+npm run build
+npx http-server public -p 3000
 ```
 
 **Browser**:
@@ -174,7 +173,7 @@ This is the **simplest and best** approach:
    ```bash
    cd android
    ./gradlew assembleDebug
-   adb install app/build/outputs/apk/debug/app-debug.apk
+   adb install -r app/build/outputs/apk/debug/app-debug.apk
    ```
 
 4. **Find Phone's IP Address**:
@@ -184,7 +183,9 @@ This is the **simplest and best** approach:
 5. **Start Web Viewer**:
    ```bash
    cd web
-   npm run dev
+   npm install
+   npm run build
+   npx http-server public -p 3000
    ```
 
 6. **Connect in Browser**:

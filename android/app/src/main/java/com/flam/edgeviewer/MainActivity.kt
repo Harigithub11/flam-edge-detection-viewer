@@ -22,6 +22,26 @@ import android.widget.Button
 import android.widget.PopupMenu
 import kotlin.concurrent.thread
 
+/**
+ * Main activity for the FLAM Edge Detection Viewer application.
+ *
+ * This activity orchestrates real-time camera capture, edge detection processing,
+ * OpenGL rendering, and WebSocket streaming. It manages multiple threads for optimal
+ * performance including camera capture, frame processing, GL rendering, and network streaming.
+ *
+ * Key Features:
+ * - Real-time camera preview with YUV to RGB conversion
+ * - Multiple processing modes: RAW, EDGES, GRAYSCALE
+ * - Triple-buffered frame pipeline for smooth rendering
+ * - WebSocket server for remote viewing (port 8080)
+ * - FPS monitoring and performance tracking
+ * - Frame export functionality
+ *
+ * @see com.flam.edgeviewer.camera.CameraManager for camera operations
+ * @see com.flam.edgeviewer.processing.FrameProcessor for JNI image processing
+ * @see com.flam.edgeviewer.gl.GLRenderer for OpenGL rendering
+ * @see com.flam.edgeviewer.network.WebSocketServer for streaming
+ */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding

@@ -3,7 +3,7 @@ package com.flam.edgeviewer.utils
 import java.util.concurrent.ArrayBlockingQueue
 
 /**
- * Thread-safe frame buffer for double buffering
+ * Thread-safe frame buffer for triple buffering
  * Implements producer-consumer pattern with automatic frame dropping
  */
 class FrameBuffer {
